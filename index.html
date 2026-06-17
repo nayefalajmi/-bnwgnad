@@ -147,9 +147,25 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
 <script src="js/config.js"></script>
 <script src="js/analytics.js"></script>
 <script>
+/* ─── Hesabe (client-side) ─── */
+const HB_MERCHANT = '47340922';
+const HB_ACCESS   = '15dc3bd9-33b3-406c-b13b-edb3d056bc30';
+const HB_SECRET   = 'XZv9dzjyPM748jYRd9MopOkbVYyBALGR';
+const HB_IV       = 'PM748jYRd9MopOkb';
+const HB_URL      = 'https://checkout.hesabe.com/payment';
+
+function hesabeEncrypt(text) {
+  const key = CryptoJS.enc.Utf8.parse(HB_SECRET);
+  const iv  = CryptoJS.enc.Utf8.parse(HB_IV);
+  return CryptoJS.AES.encrypt(text, key, {
+    iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7
+  }).toString();
+}
+
 /* ─── Icons ─── */
 const ICONS = {
   'قهوة':'☕','شاي':'🍵','بن':'🫘','هيل':'🌿',
@@ -437,31 +453,57 @@ async function submitAddress() {
     return;
   }
 
-  /* ── بطاقة: وجّه لـ Hesabe ── */
+  /* ── بطاقة: تشفير client-side → Hesabe مباشرة ── */
   btn.textContent = '⏳ جاري التوجيه…';
   try {
-    const res = await fetch('/api/create-payment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        amount:   total.toFixed(3),
-        orderRef: orderRef,
-        items:    cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
-        customer: { name, phone, address, notes },
-      }),
+    /* حفظ الطلب في Supabase */
+    try {
+      await supabase.from('orders').insert([{
+        order_ref:      orderRef,
+        customer_name:  name,
+        customer_phone: phone,
+        address:        address,
+        notes:          notes || null,
+        items:          cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
+        total:          parseFloat(total.toFixed(3)),
+        payment_method: 'card',
+        status:         'pending_payment',
+      }]);
+    } catch(e) { console.warn('Order save:', e); }
+
+    /* تشفير بيانات الدفع */
+    const paymentData = {
+      merchantCode:         HB_MERCHANT,
+      amount:               total.toFixed(3),
+      paymentType:          0,
+      responseUrl:          `${location.origin}/api/payment-callback`,
+      failureUrl:           `${location.origin}/payment-failed.html`,
+      version:              '2.0',
+      orderReferenceNumber: orderRef,
+      variable1:            name,
+      variable2:            phone,
+      variable3:            address,
+      variable4:            '',
+      variable5:            '',
+    };
+    const encrypted = hesabeEncrypt(JSON.stringify(paymentData));
+
+    /* إرسال لـ Hesabe والحصول على رابط الدفع */
+    const hbRes  = await fetch(HB_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'accessCode': HB_ACCESS },
+      body:    JSON.stringify({ data: encrypted }),
     });
+    const hbData = await hbRes.json();
 
-    const data = await res.json();
-
-    if (data.paymentUrl) {
-      window.location.href = data.paymentUrl;
+    if (hbData?.status === 1 && hbData?.response) {
+      localStorage.removeItem('bnwgnad_cart');
+      window.location.href = hbData.response;
     } else {
-      showToast('❌ ' + (data.error || 'حدث خطأ في بوابة الدفع'), 'error');
-      btn.textContent = 'الدفع بالبطاقة ←';
-      btn.disabled = false;
+      throw new Error(hbData?.message || 'رفضت بوابة الدفع الطلب');
     }
-  } catch {
-    showToast('❌ تعذّر الاتصال ببوابة الدفع', 'error');
+  } catch(err) {
+    showToast('❌ ' + err.message, 'error');
     btn.textContent = 'الدفع بالبطاقة ←';
     btn.disabled = false;
   }
