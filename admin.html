@@ -5,6 +5,144 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم | بن وقناد</title>
   <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* ── Orders ── */
+    .order-card {
+      background: #fff;
+      border-radius: 12px;
+      border: 2px solid var(--border);
+      margin-bottom: 1rem;
+      overflow: hidden;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .order-card.status-new         { border-color: #f39c12; background: #fffdf4; }
+    .order-card.status-preparing   { border-color: #2980b9; background: #f4f8fc; }
+    .order-card.status-delivering  { border-color: #e67e22; background: #fef9f4; }
+    .order-card.status-completed   { border-color: #27ae60; background: #f4fef8; }
+    .order-card.status-cancelled   { border-color: #e74c3c; background: #fef4f4; opacity: .6; }
+    .order-card.status-pending_payment { border-color: #95a5a6; background: #f8f8f8; }
+
+    .order-card-header {
+      padding: .85rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: .5rem;
+    }
+    .order-ref   { font-weight: 700; font-size: .9rem; color: var(--primary); }
+    .order-time  { font-size: .78rem; color: var(--text-muted); white-space: nowrap; }
+
+    .order-badge {
+      display: inline-block;
+      padding: .18rem .6rem;
+      border-radius: 1rem;
+      font-size: .75rem;
+      font-weight: 700;
+    }
+    .badge-new              { background: #fff3cd; color: #856404; }
+    .badge-preparing        { background: #cce5ff; color: #004085; }
+    .badge-delivering       { background: #ffecd2; color: #7a4000; }
+    .badge-completed        { background: #d4edda; color: #155724; }
+    .badge-cancelled        { background: #f8d7da; color: #721c24; }
+    .badge-pending_payment  { background: #e2e3e5; color: #383d41; }
+
+    .order-card-body     { padding: 1rem 1.25rem; }
+    .order-customer      { font-weight: 600; margin-bottom: .35rem; }
+    .order-address       { color: var(--text-muted); font-size: .88rem; margin-bottom: .4rem; }
+    .order-items {
+      font-size: .85rem;
+      background: var(--bg);
+      border-radius: 8px;
+      padding: .55rem .8rem;
+      margin-bottom: .75rem;
+      line-height: 1.6;
+    }
+    .order-footer        { display: flex; justify-content: space-between; align-items: center; font-size: .88rem; }
+    .order-total         { font-weight: 700; color: var(--accent); font-size: .95rem; }
+    .order-method        { color: var(--text-muted); }
+
+    .order-status-btns   { padding: .7rem 1.25rem; border-top: 1px solid var(--border); display: flex; gap: .45rem; flex-wrap: wrap; }
+    .status-btn {
+      padding: .3rem .85rem;
+      border-radius: 8px;
+      border: 1.5px solid;
+      cursor: pointer;
+      font-size: .8rem;
+      font-family: inherit;
+      font-weight: 600;
+      background: transparent;
+      transition: all .18s;
+    }
+    .status-btn:hover                { opacity: .85; color: #fff; }
+    .status-btn-preparing            { border-color: #2980b9; color: #2980b9; }
+    .status-btn-preparing:hover      { background: #2980b9; }
+    .status-btn-delivering           { border-color: #e67e22; color: #e67e22; }
+    .status-btn-delivering:hover     { background: #e67e22; }
+    .status-btn-completed            { border-color: #27ae60; color: #27ae60; }
+    .status-btn-completed:hover      { background: #27ae60; }
+    .status-btn-cancelled            { border-color: #e74c3c; color: #e74c3c; }
+    .status-btn-cancelled:hover      { background: #e74c3c; }
+    .status-btn-new                  { border-color: #f39c12; color: #f39c12; }
+    .status-btn-new:hover            { background: #f39c12; }
+
+    .new-order-banner {
+      background: linear-gradient(135deg, #f39c12, #e67e22);
+      color: #fff;
+      padding: 1rem 1.5rem;
+      border-radius: 12px;
+      margin-bottom: 1.25rem;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 600;
+      font-size: 1rem;
+      animation: newOrderPulse 1s ease-in-out infinite alternate;
+    }
+    .new-order-banner button {
+      background: rgba(255,255,255,.3);
+      border: none;
+      color: #fff;
+      border-radius: 50%;
+      width: 28px; height: 28px;
+      cursor: pointer;
+      font-size: .9rem;
+      line-height: 1;
+    }
+    @keyframes newOrderPulse {
+      from { box-shadow: 0 0 0 rgba(243,156,18,.4); }
+      to   { box-shadow: 0 0 16px rgba(243,156,18,.7); }
+    }
+
+    .order-filter-tabs { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .order-filter-tabs .tab-btn {
+      padding: .35rem .9rem;
+      border-radius: 2rem;
+      border: 1.5px solid var(--border);
+      background: #fff;
+      cursor: pointer;
+      font-size: .82rem;
+      font-family: inherit;
+      transition: all .18s;
+      white-space: nowrap;
+    }
+    .order-filter-tabs .tab-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    .sidebar-badge {
+      background: #e74c3c;
+      color: #fff;
+      font-size: .65rem;
+      font-weight: 700;
+      padding: .1rem .45rem;
+      border-radius: 1rem;
+      margin-right: auto;
+      margin-left: .25rem;
+    }
+
+    .sound-off { opacity: .55; }
+    .orders-empty { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 1.05rem; }
+    .header-actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+  </style>
 </head>
 <body>
 
@@ -30,7 +168,11 @@
   <aside class="admin-sidebar">
     <div class="sidebar-title">القائمة</div>
     <a href="#" data-section="products" class="active" onclick="switchSection(event,'products')">📦 المنتجات</a>
-    <a href="#" data-section="stats"    onclick="switchSection(event,'stats')">📊 الإحصائيات</a>
+    <a href="#" data-section="orders" onclick="switchSection(event,'orders')" style="display:flex;align-items:center">
+      📋 الطلبات
+      <span class="sidebar-badge" id="ordersBadge" style="display:none">0</span>
+    </a>
+    <a href="#" data-section="stats" onclick="switchSection(event,'stats')">📊 الإحصائيات</a>
     <a href="index.html">🏪 المتجر</a>
   </aside>
 
@@ -88,6 +230,38 @@
         </table>
       </div>
       <p class="table-info" id="tableInfo"></p>
+    </div>
+
+    <!-- ── Orders ── -->
+    <div id="sec-orders" style="display:none">
+      <div class="admin-header">
+        <h2>📋 إدارة الطلبات</h2>
+        <div class="header-actions">
+          <button class="btn btn-outline btn-sm sound-off" id="soundToggleBtn" onclick="toggleSound()">🔕 تفعيل الصوت</button>
+          <button class="btn btn-outline btn-sm" onclick="loadOrders()">🔄 تحديث</button>
+        </div>
+      </div>
+
+      <div class="new-order-banner" id="newOrderBanner">
+        <span>🔔 طلب جديد وصل!</span>
+        <button onclick="this.parentElement.style.display='none'">✕</button>
+      </div>
+
+      <div class="order-filter-tabs">
+        <button class="tab-btn active" data-filter=""               onclick="filterOrders('')">الكل</button>
+        <button class="tab-btn"        data-filter="new"            onclick="filterOrders('new')">🟡 جديد</button>
+        <button class="tab-btn"        data-filter="preparing"      onclick="filterOrders('preparing')">🔵 قيد التحضير</button>
+        <button class="tab-btn"        data-filter="delivering"     onclick="filterOrders('delivering')">🚚 خرج للتوصيل</button>
+        <button class="tab-btn"        data-filter="completed"      onclick="filterOrders('completed')">✅ مكتمل</button>
+        <button class="tab-btn"        data-filter="cancelled"      onclick="filterOrders('cancelled')">❌ ملغي</button>
+      </div>
+
+      <div id="ordersList">
+        <div class="orders-empty">
+          <div class="spinner" style="margin:0 auto 1rem"></div>
+          <p>جاري تحميل الطلبات…</p>
+        </div>
+      </div>
     </div>
 
   </main>
@@ -172,17 +346,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js"></script>
 <script>
-/* ════════════════════════════
-   State
-════════════════════════════ */
+/* ════════════════════════════════════════
+   PRODUCTS
+════════════════════════════════════════ */
 let products   = [];
 let editingId  = null;
 let deletingId = null;
 let uploadedFile = null;
 
-/* ════════════════════════════
-   Init
-════════════════════════════ */
 loadProducts();
 
 async function loadProducts() {
@@ -194,9 +365,6 @@ async function loadProducts() {
   populateCatOptions();
 }
 
-/* ════════════════════════════
-   Stats
-════════════════════════════ */
 function updateStats() {
   const on   = products.filter(p => p.Available).length;
   const cats = new Set(products.map(p => p.Category)).size;
@@ -206,59 +374,43 @@ function updateStats() {
   document.getElementById('stCats').textContent  = cats;
 }
 
-/* ════════════════════════════
-   Sections
-════════════════════════════ */
 function switchSection(e, name) {
   e.preventDefault();
   document.getElementById('sec-products').style.display = name === 'products' ? 'block' : 'none';
   document.getElementById('sec-stats').style.display    = name === 'stats'    ? 'block' : 'none';
+  document.getElementById('sec-orders').style.display   = name === 'orders'   ? 'block' : 'none';
   document.querySelectorAll('.admin-sidebar a[data-section]').forEach(a =>
     a.classList.toggle('active', a.dataset.section === name));
+  if (name === 'orders') loadOrders();
 }
 
-/* ════════════════════════════
-   Category options
-════════════════════════════ */
 function populateCatOptions() {
   const cats = [...new Set(products.map(p => p.Category).filter(Boolean))].sort();
-
   const sel = document.getElementById('filterCat');
   sel.innerHTML = '<option value="">كل الفئات</option>' +
     cats.map(c => `<option value="${c}">${c}</option>`).join('');
-
   document.getElementById('catsDL').innerHTML =
     cats.map(c => `<option value="${c}">`).join('');
 }
 
-/* ════════════════════════════
-   Table render
-════════════════════════════ */
 function renderTable(list) {
   document.getElementById('tableInfo').textContent =
     `عرض ${list.length} من ${products.length} منتج`;
-
   const tbody = document.getElementById('tBody');
   if (!list.length) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد نتائج</td></tr>`;
     return;
   }
-
   tbody.innerHTML = list.map(p => {
     const price = typeof p.Price === 'number' ? p.Price.toFixed(2) : parseFloat(p.Price||0).toFixed(2);
     const thumb = p.image_url
       ? `<div class="tbl-thumb"><img src="${p.image_url}" alt="${p.Name}" /></div>`
       : `<div class="tbl-thumb">🛍</div>`;
-
     return `<tr>
       <td style="color:var(--text-muted);font-size:.78rem">${p.id}</td>
       <td>${thumb}</td>
       <td><strong>${p.Name}</strong></td>
-      <td>
-        <span style="background:var(--bg);padding:.18rem .55rem;border-radius:1rem;font-size:.8rem">
-          ${p.Category||'—'}
-        </span>
-      </td>
+      <td><span style="background:var(--bg);padding:.18rem .55rem;border-radius:1rem;font-size:.8rem">${p.Category||'—'}</span></td>
       <td style="font-weight:700;color:var(--accent)">${price} د.ك</td>
       <td>
         <div class="toggle-wrap">
@@ -279,14 +431,10 @@ function renderTable(list) {
   }).join('');
 }
 
-/* ════════════════════════════
-   Filter
-════════════════════════════ */
 function filterTable() {
   const q     = document.getElementById('searchQ').value.toLowerCase();
   const cat   = document.getElementById('filterCat').value;
   const avail = document.getElementById('filterAvail').value;
-
   const filtered = products.filter(p => {
     const mQ = !q || p.Name.toLowerCase().includes(q) || (p.Description||'').toLowerCase().includes(q);
     const mC = !cat   || p.Category === cat;
@@ -296,9 +444,6 @@ function filterTable() {
   renderTable(filtered);
 }
 
-/* ════════════════════════════
-   Toggle Available
-════════════════════════════ */
 async function toggleAvail(id, current) {
   const { error } = await supabase.from('products').update({ Available: !current }).eq('id', id);
   if (error) { showToast('فشل تحديث الحالة', 'error'); return; }
@@ -308,9 +453,6 @@ async function toggleAvail(id, current) {
   showToast(!current ? '✅ المنتج أصبح ظاهراً' : '🔴 تم إخفاء المنتج', 'success');
 }
 
-/* ════════════════════════════
-   Modal (Add / Edit)
-════════════════════════════ */
 function openModal(id = null) {
   editingId    = id;
   uploadedFile = null;
@@ -319,9 +461,7 @@ function openModal(id = null) {
   preview.style.display = 'none';
   ph.style.display = 'block';
   document.getElementById('fImage').value = '';
-
   document.getElementById('modalTitle').textContent = id ? '✏️ تعديل المنتج' : '➕ إضافة منتج جديد';
-
   if (id) {
     const p = products.find(x => x.id === id);
     document.getElementById('fName').value     = p.Name;
@@ -343,28 +483,23 @@ function openModal(id = null) {
     document.getElementById('fAvail').checked  = true;
     document.getElementById('fImageUrl').value = '';
   }
-
   document.getElementById('modalOverlay').classList.add('open');
 }
-
 function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
 
-/* ── Image preview (file) ── */
 function previewImage(e) {
   const file = e.target.files[0];
   if (!file) return;
   uploadedFile = file;
   const preview = document.getElementById('imgPreview');
-  const ph      = document.getElementById('uploadPlaceholder');
   preview.src = URL.createObjectURL(file);
   preview.style.display = 'block';
-  ph.style.display = 'none';
+  document.getElementById('uploadPlaceholder').style.display = 'none';
   document.getElementById('fImageUrl').value = '';
 }
 
-/* ── Image preview (URL) ── */
 function previewFromUrl() {
-  const url = document.getElementById('fImageUrl').value.trim();
+  const url     = document.getElementById('fImageUrl').value.trim();
   const preview = document.getElementById('imgPreview');
   const ph      = document.getElementById('uploadPlaceholder');
   if (url) {
@@ -379,61 +514,44 @@ function previewFromUrl() {
   }
 }
 
-/* ── Upload image to Supabase Storage ── */
 async function uploadImage(file) {
   const ext  = file.name.split('.').pop();
   const path = `products/${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from('product-images').upload(path, file, {
-    cacheControl: '3600', upsert: false
-  });
+  const { error } = await supabase.storage.from('product-images').upload(path, file, { cacheControl: '3600', upsert: false });
   if (error) throw new Error('فشل رفع الصورة: ' + error.message);
   const { data } = supabase.storage.from('product-images').getPublicUrl(path);
   return data.publicUrl;
 }
 
-/* ── Save (insert / update) ── */
 async function saveProduct() {
   const name  = document.getElementById('fName').value.trim();
   const cat   = document.getElementById('fCategory').value.trim();
   const price = parseFloat(document.getElementById('fPrice').value);
   const desc  = document.getElementById('fDesc').value.trim();
   const avail = document.getElementById('fAvail').checked;
-
   if (!name || !cat || isNaN(price) || price < 0) {
-    showToast('⚠️ يرجى ملء الاسم والفئة والسعر بشكل صحيح', 'error');
-    return;
+    showToast('⚠️ يرجى ملء الاسم والفئة والسعر بشكل صحيح', 'error'); return;
   }
-
   const saveBtn = document.querySelector('#modalOverlay .btn-accent');
   saveBtn.textContent = '⏳ جاري الحفظ…';
   saveBtn.disabled = true;
-
   try {
-    /* Resolve image URL */
     let imageUrl = document.getElementById('fImageUrl').value.trim() || null;
-    if (uploadedFile) {
-      imageUrl = await uploadImage(uploadedFile);
-    }
-
+    if (uploadedFile) imageUrl = await uploadImage(uploadedFile);
     const payload = {
-      Name: name, Category: cat, Price: price,
-      Description: desc || null, Available: avail,
+      Name: name, Category: cat, Price: price, Description: desc || null, Available: avail,
       ...(imageUrl !== undefined ? { image_url: imageUrl } : {})
     };
-
     let error;
     if (editingId) {
       ({ error } = await supabase.from('products').update(payload).eq('id', editingId));
     } else {
       ({ error } = await supabase.from('products').insert([payload]));
     }
-
     if (error) throw new Error(error.message);
-
     closeModal();
     showToast(editingId ? '✅ تم تحديث المنتج' : '✅ تمت إضافة المنتج', 'success');
     await loadProducts();
-
   } catch (err) {
     showToast('❌ ' + err.message, 'error');
   } finally {
@@ -442,9 +560,6 @@ async function saveProduct() {
   }
 }
 
-/* ════════════════════════════
-   Delete
-════════════════════════════ */
 function openDelete(id) {
   deletingId = id;
   const p = products.find(x => x.id === id);
@@ -452,7 +567,6 @@ function openDelete(id) {
   document.getElementById('deleteOverlay').classList.add('open');
 }
 function closeDelete() { document.getElementById('deleteOverlay').classList.remove('open'); }
-
 async function confirmDelete() {
   const { error } = await supabase.from('products').delete().eq('id', deletingId);
   if (error) { showToast('❌ فشل الحذف: ' + error.message, 'error'); return; }
@@ -461,9 +575,250 @@ async function confirmDelete() {
   await loadProducts();
 }
 
-/* ════════════════════════════
-   Helpers
-════════════════════════════ */
+/* ════════════════════════════════════════
+   ORDERS
+════════════════════════════════════════ */
+let orders       = [];
+let lastNewCount = null;
+let orderFilter  = '';
+let pollInterval = null;
+let soundEnabled = false;
+let audioCtx     = null;
+
+async function loadOrders() {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) { showToast('خطأ في تحميل الطلبات', 'error'); return; }
+
+  const newCount = (data || []).filter(o => o.status === 'new').length;
+
+  const badge = document.getElementById('ordersBadge');
+  badge.textContent   = newCount;
+  badge.style.display = newCount > 0 ? 'inline' : 'none';
+
+  if (lastNewCount !== null && newCount > lastNewCount) {
+    triggerNewOrderAlert();
+  }
+  lastNewCount = newCount;
+
+  orders = data || [];
+  renderOrders();
+}
+
+function renderOrders() {
+  const container = document.getElementById('ordersList');
+  const list = orderFilter ? orders.filter(o => o.status === orderFilter) : orders;
+  if (!list.length) {
+    container.innerHTML = `<div class="orders-empty">📋 لا توجد طلبات في هذه الفئة</div>`;
+    return;
+  }
+  container.innerHTML = list.map(renderOrderCard).join('');
+}
+
+function renderOrderCard(order) {
+  const labels = {
+    new:             '🟡 جديد',
+    preparing:       '🔵 قيد التحضير',
+    delivering:      '🚚 خرج للتوصيل',
+    completed:       '✅ مكتمل',
+    cancelled:       '❌ ملغي',
+    pending_payment: '⏳ بانتظار الدفع',
+  };
+  const badgeCls = {
+    new:             'badge-new',
+    preparing:       'badge-preparing',
+    delivering:      'badge-delivering',
+    completed:       'badge-completed',
+    cancelled:       'badge-cancelled',
+    pending_payment: 'badge-pending_payment',
+  };
+
+  const items     = Array.isArray(order.items) ? order.items : [];
+  const itemsText = items.map(i => `${i.name} × ${i.qty}`).join('، ') || '—';
+  const total     = parseFloat(order.total || 0).toFixed(3);
+  const method    = order.payment_method === 'cash' ? '💵 كاش' : '💳 بطاقة';
+  const timeAgo   = fmtTimeAgo(order.created_at);
+
+  let statusBtns = '';
+  if (order.status === 'new') {
+    statusBtns = `
+      <button class="status-btn status-btn-preparing" onclick="setStatus(${order.id},'preparing')">🔵 قيد التحضير</button>
+      <button class="status-btn status-btn-cancelled" onclick="setStatus(${order.id},'cancelled')">❌ إلغاء</button>`;
+  } else if (order.status === 'preparing') {
+    statusBtns = `
+      <button class="status-btn status-btn-delivering" onclick="setStatus(${order.id},'delivering')">🚚 خرج للتوصيل</button>
+      <button class="status-btn status-btn-cancelled"  onclick="setStatus(${order.id},'cancelled')">❌ إلغاء</button>`;
+  } else if (order.status === 'delivering') {
+    statusBtns = `
+      <button class="status-btn status-btn-completed" onclick="setStatus(${order.id},'completed')">✅ مكتمل</button>
+      <button class="status-btn status-btn-cancelled" onclick="setStatus(${order.id},'cancelled')">❌ إلغاء</button>`;
+  } else if (order.status === 'pending_payment') {
+    statusBtns = `
+      <button class="status-btn status-btn-new"       onclick="setStatus(${order.id},'new')">🟡 تأكيد كطلب جديد</button>
+      <button class="status-btn status-btn-cancelled" onclick="setStatus(${order.id},'cancelled')">❌ إلغاء</button>`;
+  }
+
+  return `
+  <div class="order-card status-${order.status}" id="order-${order.id}">
+    <div class="order-card-header">
+      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+        <span class="order-ref">#${esc(order.order_ref || String(order.id))}</span>
+        <span class="order-badge ${badgeCls[order.status] || ''}">${labels[order.status] || order.status}</span>
+      </div>
+      <span class="order-time">${timeAgo}</span>
+    </div>
+    <div class="order-card-body">
+      <div class="order-customer">👤 ${esc(order.customer_name || '—')} — 📞 ${esc(order.customer_phone || '—')}</div>
+      <div class="order-address">📍 ${esc(order.address || '—')}</div>
+      ${order.notes ? `<div class="order-address">📝 ${esc(order.notes)}</div>` : ''}
+      <div class="order-items">${esc(itemsText)}</div>
+      <div class="order-footer">
+        <span class="order-total">${total} د.ك</span>
+        <span class="order-method">${method}</span>
+      </div>
+    </div>
+    ${statusBtns ? `<div class="order-status-btns">${statusBtns}</div>` : ''}
+  </div>`;
+}
+
+async function setStatus(id, status) {
+  const { error } = await supabase.from('orders').update({ status }).eq('id', id);
+  if (error) { showToast('❌ فشل تحديث الحالة', 'error'); return; }
+  orders = orders.map(o => o.id === id ? { ...o, status } : o);
+  const newCount = orders.filter(o => o.status === 'new').length;
+  lastNewCount = newCount;
+  const badge = document.getElementById('ordersBadge');
+  badge.textContent   = newCount;
+  badge.style.display = newCount > 0 ? 'inline' : 'none';
+  renderOrders();
+  showToast('✅ تم تحديث حالة الطلب', 'success');
+}
+
+function filterOrders(status) {
+  orderFilter = status;
+  document.querySelectorAll('.order-filter-tabs .tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === status);
+  });
+  renderOrders();
+}
+
+/* ── Polling every 30 s ── */
+function startPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    const { data } = await supabase
+      .from('orders')
+      .select('id,status')
+      .eq('status', 'new');
+
+    if (!data) return;
+    const newCount = data.length;
+
+    if (lastNewCount !== null && newCount > lastNewCount) {
+      triggerNewOrderAlert();
+      if (document.getElementById('sec-orders').style.display !== 'none') {
+        await loadOrders();
+        return;
+      }
+    }
+    lastNewCount = newCount;
+
+    const badge = document.getElementById('ordersBadge');
+    badge.textContent   = newCount;
+    badge.style.display = newCount > 0 ? 'inline' : 'none';
+  }, 30000);
+}
+
+/* ── Sound ── */
+function toggleSound() {
+  if (!soundEnabled) {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      soundEnabled = true;
+      document.getElementById('soundToggleBtn').textContent = '🔔 الصوت مفعّل';
+      document.getElementById('soundToggleBtn').classList.remove('sound-off');
+      showToast('✅ تم تفعيل التنبيه الصوتي', 'success');
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    } catch(e) {
+      showToast('❌ لا يدعم المتصفح الصوت', 'error');
+    }
+  } else {
+    soundEnabled = false;
+    document.getElementById('soundToggleBtn').textContent = '🔕 الصوت معطّل';
+    document.getElementById('soundToggleBtn').classList.add('sound-off');
+  }
+}
+
+function playAlertSound() {
+  if (!soundEnabled || !audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  const tone = (freq, t0, dur, vol = 0.5) => {
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime + t0);
+    gain.gain.setValueAtTime(vol,   audioCtx.currentTime + t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + t0 + dur);
+    osc.start(audioCtx.currentTime + t0);
+    osc.stop(audioCtx.currentTime  + t0 + dur + 0.05);
+  };
+
+  // دينج دونج دينج (bell-like)
+  tone(880,  0,    0.5, 0.5);
+  tone(1100, 0.08, 0.4, 0.4);
+  tone(880,  0.65, 0.5, 0.5);
+  tone(1100, 0.73, 0.4, 0.4);
+  tone(660,  1.3,  0.7, 0.35);
+}
+
+function triggerNewOrderAlert() {
+  playAlertSound();
+
+  const banner = document.getElementById('newOrderBanner');
+  banner.style.display = 'flex';
+  clearTimeout(banner._t);
+  banner._t = setTimeout(() => { banner.style.display = 'none'; }, 9000);
+
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('بن وقناد — طلب جديد! 🔔', {
+      body:     'وصل طلب جديد، اضغط للاطلاع عليه',
+      icon:     '/logo.png',
+      tag:      'new-order',
+      renotify: true,
+    });
+  }
+}
+
+/* ── Helpers ── */
+function fmtTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'الآن';
+  if (m < 60) return `منذ ${m} دقيقة`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `منذ ${h} ساعة`;
+  return `منذ ${Math.floor(h / 24)} يوم`;
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ════════════════════════════════════════
+   SHARED
+════════════════════════════════════════ */
 function overlayClick(e, overlayId, closeFn) {
   if (e.target.id === overlayId) closeFn();
 }
@@ -475,6 +830,8 @@ function showToast(msg, type = '') {
   clearTimeout(t._t);
   t._t = setTimeout(() => t.classList.remove('show'), 3000);
 }
+
+startPolling();
 </script>
 </body>
 </html>

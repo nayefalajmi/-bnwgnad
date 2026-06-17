@@ -414,6 +414,19 @@ async function submitAddress() {
   /* ── كاش: أكّد الطلب مباشرة ── */
   if (selectedPayMethod === 'cash') {
     btn.textContent = '⏳ جاري التأكيد…';
+    try {
+      await supabase.from('orders').insert([{
+        order_ref:      orderRef,
+        customer_name:  name,
+        customer_phone: phone,
+        address:        address,
+        notes:          notes || null,
+        items:          cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
+        total:          parseFloat(total.toFixed(3)),
+        payment_method: 'cash',
+        status:         'new'
+      }]);
+    } catch(e) { console.warn('Order save failed:', e); }
     const params = new URLSearchParams({ ref: orderRef, amount: total.toFixed(3), method: 'cash' });
     localStorage.removeItem('bnwgnad_cart');
     window.location.href = `/payment-success.html?${params}`;
@@ -429,7 +442,7 @@ async function submitAddress() {
       body: JSON.stringify({
         amount:   total.toFixed(3),
         orderRef: orderRef,
-        items:    cart.map(i => `${i.name} x${i.qty}`),
+        items:    cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
         customer: { name, phone, address, notes },
       }),
     });
