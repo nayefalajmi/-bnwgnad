@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة التحكم | بن وقناد</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="navbar">
+  <a href="index.html" class="logo">☕ بن وقناد</a>
+  <nav>
+    <a href="index.html">المتجر</a>
+    <a href="admin.html" style="color:var(--accent-light)">لوحة التحكم</a>
+  </nav>
+</header>
+
+<div class="admin-layout">
+  <!-- Sidebar -->
+  <aside class="admin-sidebar">
+    <div class="sidebar-title">القائمة</div>
+    <a href="#" class="active" onclick="showSection('products')">📦 المنتجات</a>
+    <a href="#" onclick="showSection('stats')">📊 الإحصائيات</a>
+    <a href="index.html">🏪 المتجر</a>
+  </aside>
+
+  <!-- Main -->
+  <main class="admin-main">
+
+    <!-- Stats Section -->
+    <div id="section-stats" style="display:none">
+      <div class="admin-header"><h2>📊 الإحصائيات</h2></div>
+      <div class="stats-row" id="statsRow">
+        <div class="stat-card"><div class="stat-num" id="statTotal">-</div><div class="stat-label">إجمالي المنتجات</div></div>
+        <div class="stat-card"><div class="stat-num" id="statAvail">-</div><div class="stat-label">متوفرة</div></div>
+        <div class="stat-card"><div class="stat-num" id="statHidden">-</div><div class="stat-label">مخفية</div></div>
+        <div class="stat-card"><div class="stat-num" id="statCats">-</div><div class="stat-label">الفئات</div></div>
+      </div>
+    </div>
+
+    <!-- Products Section -->
+    <div id="section-products">
+      <div class="admin-header">
+        <h2>📦 إدارة المنتجات</h2>
+        <button class="btn btn-accent" onclick="openModal()">+ إضافة منتج</button>
+      </div>
+
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="🔍 ابحث عن منتج..." oninput="filterTable()" />
+        <select id="catFilter" onchange="filterTable()">
+          <option value="">كل الفئات</option>
+        </select>
+        <select id="availFilter" onchange="filterTable()">
+          <option value="">الكل</option>
+          <option value="true">متوفر فقط</option>
+          <option value="false">مخفي فقط</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>الاسم</th>
+              <th>الفئة</th>
+              <th>السعر</th>
+              <th>الوصف</th>
+              <th>الحالة</th>
+              <th>إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="productsTable">
+            <tr><td colspan="7" style="text-align:center;padding:2rem">
+              <div class="spinner" style="margin:auto"></div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p id="tableCount" style="font-size:.82rem;color:var(--text-muted);margin-top:.5rem;padding-right:.25rem"></p>
+    </div>
+
+  </main>
+</div>
+
+<!-- Modal: Add / Edit Product -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <h3 id="modalTitle">إضافة منتج جديد</h3>
+    <div class="form-group">
+      <label>اسم المنتج *</label>
+      <input type="text" id="fName" placeholder="مثال: قهوة سعودية" />
+    </div>
+    <div class="form-group">
+      <label>الفئة *</label>
+      <input type="text" id="fCategory" placeholder="مثال: قهوة، شاي، أخرى" list="catsList" />
+      <datalist id="catsList"></datalist>
+    </div>
+    <div class="form-group">
+      <label>السعر (ريال) *</label>
+      <input type="number" id="fPrice" placeholder="0.00" min="0" step="0.01" />
+    </div>
+    <div class="form-group">
+      <label>الوصف</label>
+      <textarea id="fDescription" rows="3" placeholder="وصف اختياري..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>الحالة</label>
+      <div class="checkbox-row">
+        <input type="checkbox" id="fAvailable" checked />
+        <label for="fAvailable" style="color:var(--text);font-weight:400">متوفر (ظاهر في المتجر)</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-accent" onclick="saveProduct()">💾 حفظ</button>
+      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal-overlay" id="deleteOverlay" onclick="closeDeleteOutside(event)">
+  <div class="modal" style="max-width:360px;text-align:center">
+    <h3>⚠️ تأكيد الحذف</h3>
+    <p style="margin:.75rem 0 1.5rem;color:var(--text-muted)">هل أنت متأكد من حذف هذا المنتج؟ لا يمكن التراجع عن هذا الإجراء.</p>
+    <div style="display:flex;gap:.75rem;justify-content:center">
+      <button class="btn btn-danger" onclick="confirmDelete()">نعم، احذف</button>
+      <button class="btn btn-outline" onclick="closeDelete()">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script>
+  let products = [];
+  let editingId = null;
+  let deletingId = null;
+
+  // ===== SECTION TOGGLE =====
+  function showSection(name) {
+    document.getElementById('section-products').style.display = name === 'products' ? 'block' : 'none';
+    document.getElementById('section-stats').style.display    = name === 'stats'    ? 'block' : 'none';
+    document.querySelectorAll('.admin-sidebar a').forEach(a => a.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+  }
+
+  // ===== LOAD =====
+  async function loadProducts() {
+    const { data, error } = await supabase.from('products').select('*').order('id');
+    if (error) { showToast('خطأ في تحميل البيانات', 'error'); return; }
+    products = data;
+    renderTable(products);
+    updateStats();
+    populateCatFilter();
+  }
+
+  function updateStats() {
+    const avail = products.filter(p => p.Available).length;
+    const cats  = new Set(products.map(p => p.Category)).size;
+    document.getElementById('statTotal').textContent = products.length;
+    document.getElementById('statAvail').textContent = avail;
+    document.getElementById('statHidden').textContent = products.length - avail;
+    document.getElementById('statCats').textContent = cats;
+  }
+
+  function populateCatFilter() {
+    const cats = [...new Set(products.map(p => p.Category))].sort();
+    const sel  = document.getElementById('catFilter');
+    sel.innerHTML = '<option value="">كل الفئات</option>' +
+      cats.map(c => `<option value="${c}">${c}</option>`).join('');
+
+    const dl = document.getElementById('catsList');
+    dl.innerHTML = cats.map(c => `<option value="${c}">`).join('');
+  }
+
+  // ===== RENDER TABLE =====
+  function renderTable(list) {
+    const tbody = document.getElementById('productsTable');
+    document.getElementById('tableCount').textContent = `عرض ${list.length} من ${products.length} منتج`;
+
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد نتائج</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = list.map(p => `
+      <tr>
+        <td style="color:var(--text-muted);font-size:.8rem">${p.id}</td>
+        <td><strong>${p.Name}</strong></td>
+        <td><span style="background:var(--bg);padding:.2rem .6rem;border-radius:1rem;font-size:.8rem">${p.Category}</span></td>
+        <td style="font-weight:600;color:var(--accent)">${p.Price.toFixed(2)} ر</td>
+        <td style="font-size:.8rem;color:var(--text-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${p.Description || '—'}
+        </td>
+        <td>
+          <button class="toggle-btn ${p.Available ? 'on' : 'off'}"
+            onclick="toggleAvailable(${p.id}, ${p.Available})"
+            title="${p.Available ? 'إخفاء المنتج' : 'إظهار المنتج'}">
+          </button>
+        </td>
+        <td>
+          <div class="actions-cell">
+            <button class="btn btn-sm btn-outline" onclick="openModal(${p.id})">✏️ تعديل</button>
+            <button class="btn btn-sm btn-danger"  onclick="openDelete(${p.id})">🗑️</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // ===== FILTER =====
+  function filterTable() {
+    const q    = document.getElementById('searchInput').value.toLowerCase();
+    const cat  = document.getElementById('catFilter').value;
+    const avail = document.getElementById('availFilter').value;
+
+    const filtered = products.filter(p => {
+      const matchQ = p.Name.toLowerCase().includes(q) ||
+                     (p.Description || '').toLowerCase().includes(q);
+      const matchCat   = !cat   || p.Category === cat;
+      const matchAvail = avail === '' || String(p.Available) === avail;
+      return matchQ && matchCat && matchAvail;
+    });
+    renderTable(filtered);
+  }
+
+  // ===== TOGGLE AVAILABLE =====
+  async function toggleAvailable(id, current) {
+    const { error } = await supabase
+      .from('products')
+      .update({ Available: !current })
+      .eq('id', id);
+    if (error) { showToast('فشل تحديث الحالة', 'error'); return; }
+    products = products.map(p => p.id === id ? { ...p, Available: !current } : p);
+    filterTable();
+    updateStats();
+    showToast(!current ? '✅ المنتج أصبح متوفراً' : '🔴 تم إخفاء المنتج', 'success');
+  }
+
+  // ===== MODAL =====
+  function openModal(id = null) {
+    editingId = id;
+    const modal = document.getElementById('modalOverlay');
+    document.getElementById('modalTitle').textContent = id ? '✏️ تعديل المنتج' : '➕ إضافة منتج جديد';
+
+    if (id) {
+      const p = products.find(x => x.id === id);
+      document.getElementById('fName').value        = p.Name;
+      document.getElementById('fCategory').value    = p.Category;
+      document.getElementById('fPrice').value       = p.Price;
+      document.getElementById('fDescription').value = p.Description || '';
+      document.getElementById('fAvailable').checked = p.Available;
+    } else {
+      document.getElementById('fName').value        = '';
+      document.getElementById('fCategory').value    = '';
+      document.getElementById('fPrice').value       = '';
+      document.getElementById('fDescription').value = '';
+      document.getElementById('fAvailable').checked = true;
+    }
+    modal.classList.add('open');
+  }
+
+  function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+  function closeModalOutside(e) { if (e.target === document.getElementById('modalOverlay')) closeModal(); }
+
+  async function saveProduct() {
+    const name  = document.getElementById('fName').value.trim();
+    const cat   = document.getElementById('fCategory').value.trim();
+    const price = parseFloat(document.getElementById('fPrice').value);
+    const desc  = document.getElementById('fDescription').value.trim();
+    const avail = document.getElementById('fAvailable').checked;
+
+    if (!name || !cat || isNaN(price)) {
+      showToast('يرجى ملء جميع الحقول المطلوبة', 'error'); return;
+    }
+
+    const payload = { Name: name, Category: cat, Price: price, Description: desc || null, Available: avail };
+
+    let error;
+    if (editingId) {
+      ({ error } = await supabase.from('products').update(payload).eq('id', editingId));
+    } else {
+      ({ error } = await supabase.from('products').insert([payload]));
+    }
+
+    if (error) { showToast('فشل الحفظ: ' + error.message, 'error'); return; }
+
+    closeModal();
+    showToast(editingId ? '✅ تم تحديث المنتج' : '✅ تمت إضافة المنتج', 'success');
+    await loadProducts();
+  }
+
+  // ===== DELETE =====
+  function openDelete(id) {
+    deletingId = id;
+    document.getElementById('deleteOverlay').classList.add('open');
+  }
+  function closeDelete() { document.getElementById('deleteOverlay').classList.remove('open'); }
+  function closeDeleteOutside(e) { if (e.target === document.getElementById('deleteOverlay')) closeDelete(); }
+
+  async function confirmDelete() {
+    const { error } = await supabase.from('products').delete().eq('id', deletingId);
+    if (error) { showToast('فشل الحذف: ' + error.message, 'error'); return; }
+    closeDelete();
+    showToast('🗑️ تم حذف المنتج', 'success');
+    await loadProducts();
+  }
+
+  // ===== TOAST =====
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast ' + type;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  loadProducts();
+</script>
+</body>
+</html>

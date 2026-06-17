@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>بن وقناد | متجر القهوة والشاي</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="navbar">
+  <a href="index.html" class="logo">☕ بن وقناد</a>
+  <nav>
+    <a href="index.html">المتجر</a>
+    <a href="admin.html">لوحة التحكم</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1>☕ بن وقناد</h1>
+  <p>أجود أنواع القهوة والشاي — مباشرة لطاولتك</p>
+</section>
+
+<div class="filters" id="filters">
+  <button class="filter-btn active" data-cat="all">الكل</button>
+</div>
+
+<section class="products-section">
+  <h2 class="section-title">🛍 المنتجات</h2>
+  <div class="products-grid" id="productsGrid">
+    <div class="loading-state" style="grid-column:1/-1">
+      <div class="spinner"></div>
+      <p>جاري تحميل المنتجات...</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>© 2026 بن وقناد — جميع الحقوق محفوظة</p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script>
+  const grid     = document.getElementById('productsGrid');
+  const filtersEl = document.getElementById('filters');
+  let allProducts = [];
+
+  const icons = {
+    'قهوة': '☕', 'شاي': '🍵', 'بن': '🫘', 'هيل': '🌿',
+    'زعفران': '🌸', 'عطر': '🌺', 'أخرى': '🛍', 'توابل': '🌶️'
+  };
+
+  function getIcon(name, cat) {
+    for (const [k, v] of Object.entries(icons)) {
+      if (name.includes(k) || cat.includes(k)) return v;
+    }
+    return icons['أخرى'];
+  }
+
+  function renderProducts(list) {
+    if (!list.length) {
+      grid.innerHTML = '<div class="empty-state"><p>لا توجد منتجات في هذه الفئة</p></div>';
+      return;
+    }
+    grid.innerHTML = list.filter(p => p.Available).map(p => `
+      <div class="product-card">
+        <span class="badge badge-available">متوفر</span>
+        <div class="product-icon">${getIcon(p.Name, p.Category)}</div>
+        <h3>${p.Name}</h3>
+        <p class="category">${p.Category}</p>
+        ${p.Description ? `<p class="description">${p.Description}</p>` : ''}
+        <p class="price">${p.Price.toFixed(2)} <span>ريال</span></p>
+      </div>
+    `).join('');
+  }
+
+  async function loadProducts() {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('Name');
+
+    if (error) {
+      grid.innerHTML = '<div class="empty-state"><p>حدث خطأ أثناء تحميل المنتجات</p></div>';
+      return;
+    }
+
+    allProducts = data;
+
+    const cats = ['all', ...new Set(data.map(p => p.Category))];
+    filtersEl.innerHTML = cats.map(c =>
+      `<button class="filter-btn ${c === 'all' ? 'active' : ''}" data-cat="${c}">
+        ${c === 'all' ? 'الكل' : c}
+      </button>`
+    ).join('');
+
+    filtersEl.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        filtersEl.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const cat = btn.dataset.cat;
+        renderProducts(cat === 'all' ? allProducts : allProducts.filter(p => p.Category === cat));
+      });
+    });
+
+    renderProducts(allProducts);
+  }
+
+  loadProducts();
+</script>
+</body>
+</html>
