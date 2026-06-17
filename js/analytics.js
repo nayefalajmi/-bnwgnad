@@ -3,11 +3,8 @@
    ─ ضع كود GA ومعرّف Pixel هنا عند التسجيل
 ════════════════════════════════════════════════════ */
 
-// ← Google Analytics Measurement ID (مثال: G-XXXXXXXXXX)
-const GA_ID = '';
-
-// ← Meta Pixel ID (مثال: 1234567890)
-const META_PIXEL_ID = '';
+const GA_ID         = 'G-ZPJT0VKWJ2';
+const META_PIXEL_ID = '1191266298892618';
 
 /* ─── Google Analytics ──────────────────────────── */
 (function initGA() {
