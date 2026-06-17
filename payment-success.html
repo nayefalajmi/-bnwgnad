@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تم الدفع بنجاح | بن وقناد</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .result-page {
+      min-height: calc(100vh - 66px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    .result-card {
+      background: #fff;
+      border-radius: 20px;
+      padding: 3rem 2.5rem;
+      text-align: center;
+      max-width: 440px;
+      width: 100%;
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 40px rgba(59,31,8,.1);
+    }
+    .result-icon { font-size: 4rem; margin-bottom: 1rem; }
+    .result-card h2 { color: var(--success); font-size: 1.6rem; margin-bottom: .5rem; }
+    .result-card p  { color: var(--text-muted); margin-bottom: .4rem; font-size: .95rem; }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      background: var(--bg);
+      border-radius: 8px;
+      padding: .6rem 1rem;
+      margin: .4rem 0;
+      font-size: .88rem;
+    }
+    .detail-row span:last-child { font-weight: 600; color: var(--primary); }
+    .btn-home {
+      display: inline-block;
+      margin-top: 1.5rem;
+      background: var(--accent);
+      color: #fff;
+      padding: .75rem 2rem;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: opacity .2s;
+    }
+    .btn-home:hover { opacity: .87; }
+  </style>
+</head>
+<body>
+
+<header class="navbar">
+  <a href="index.html" class="navbar-brand">
+    <img src="logo.png" alt="بن وقناد" class="logo-img"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+    <div class="brand-text">
+      <span class="brand-name">بن وقناد</span>
+      <span class="brand-since">منذ ٢٠٢٠</span>
+    </div>
+  </a>
+</header>
+
+<div class="result-page">
+  <div class="result-card">
+    <div class="result-icon">✅</div>
+    <h2>تم الدفع بنجاح!</h2>
+    <p>شكراً لطلبك من بن وقناد</p>
+
+    <div style="margin: 1.5rem 0" id="details"></div>
+
+    <a href="index.html" class="btn-home">🏪 العودة للمتجر</a>
+  </div>
+</div>
+
+<script>
+  const p = new URLSearchParams(location.search);
+  const details = document.getElementById('details');
+  const rows = [
+    ['رقم الطلب',    p.get('ref')    || '—'],
+    ['المبلغ',       p.get('amount') ? p.get('amount') + ' د.ك' : '—'],
+    ['رقم العملية',  p.get('txn')    || '—'],
+  ];
+  details.innerHTML = rows.map(([k,v]) =>
+    `<div class="detail-row"><span>${k}</span><span>${v}</span></div>`
+  ).join('');
+
+  // Clear cart after successful payment
+  localStorage.removeItem('bnwgnad_cart');
+</script>
+</body>
+</html>

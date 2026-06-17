@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>فشل الدفع | بن وقناد</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .result-page {
+      min-height: calc(100vh - 66px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    .result-card {
+      background: #fff;
+      border-radius: 20px;
+      padding: 3rem 2.5rem;
+      text-align: center;
+      max-width: 440px;
+      width: 100%;
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 40px rgba(59,31,8,.1);
+    }
+    .result-icon { font-size: 4rem; margin-bottom: 1rem; }
+    .result-card h2 { color: var(--danger); font-size: 1.6rem; margin-bottom: .75rem; }
+    .result-card p  { color: var(--text-muted); font-size: .95rem; line-height: 1.6; }
+    .btn-retry {
+      display: inline-block;
+      margin-top: 1.5rem;
+      background: var(--primary);
+      color: #fff;
+      padding: .75rem 2rem;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: opacity .2s;
+      margin-left: .75rem;
+    }
+    .btn-home {
+      display: inline-block;
+      margin-top: 1.5rem;
+      background: transparent;
+      color: var(--primary);
+      border: 1.5px solid var(--primary);
+      padding: .75rem 2rem;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: opacity .2s;
+    }
+    .btn-retry:hover, .btn-home:hover { opacity: .8; }
+  </style>
+</head>
+<body>
+
+<header class="navbar">
+  <a href="index.html" class="navbar-brand">
+    <img src="logo.png" alt="بن وقناد" class="logo-img"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+    <div class="brand-text">
+      <span class="brand-name">بن وقناد</span>
+      <span class="brand-since">منذ ٢٠٢٠</span>
+    </div>
+  </a>
+</header>
+
+<div class="result-page">
+  <div class="result-card">
+    <div class="result-icon">❌</div>
+    <h2>لم يتم الدفع</h2>
+    <p>حدث خطأ أثناء معالجة الدفع أو تم إلغاؤه.<br>يمكنك المحاولة مرة أخرى أو التواصل معنا.</p>
+    <div>
+      <a href="index.html" class="btn-retry">🔄 حاول مرة أخرى</a>
+      <a href="index.html" class="btn-home">🏪 المتجر</a>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

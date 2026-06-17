@@ -69,7 +69,7 @@
         <span>المجموع:</span>
         <span id="cartTotal">0.00 د.ك</span>
       </div>
-      <button class="checkout-btn">إتمام الطلب ✓</button>
+      <button class="checkout-btn" id="checkoutBtn" onclick="startCheckout()">إتمام الطلب ✓</button>
     </div>
   </aside>
 </div>
@@ -281,6 +281,44 @@ function showToast(msg, type='') {
   t.classList.add('show');
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ─── Checkout ─── */
+async function startCheckout() {
+  if (!cart.length) return;
+
+  const btn = document.getElementById('checkoutBtn');
+  btn.textContent = '⏳ جاري التوجيه…';
+  btn.disabled = true;
+
+  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const orderRef = 'ORD-' + Date.now();
+
+  try {
+    const res = await fetch('/api/create-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount:   total.toFixed(3),
+        orderRef: orderRef,
+        items:    cart.map(i => `${i.name} x${i.qty}`),
+      }),
+    });
+
+    const data = await res.json();
+
+    if (data.paymentUrl) {
+      window.location.href = data.paymentUrl;
+    } else {
+      showToast('❌ ' + (data.error || 'حدث خطأ في بوابة الدفع'), 'error');
+      btn.textContent = 'إتمام الطلب ✓';
+      btn.disabled = false;
+    }
+  } catch (err) {
+    showToast('❌ تعذّر الاتصال ببوابة الدفع', 'error');
+    btn.textContent = 'إتمام الطلب ✓';
+    btn.disabled = false;
+  }
 }
 
 /* ─── Init ─── */
