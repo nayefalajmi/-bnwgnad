@@ -8,52 +8,61 @@
 </head>
 <body>
 
+<!-- ══ NAVBAR ══ -->
 <header class="navbar">
-  <a href="index.html" class="logo">☕ بن وقناد</a>
-  <nav>
-    <a href="index.html">المتجر</a>
-    <a href="admin.html" style="color:var(--accent-light)">لوحة التحكم</a>
-  </nav>
+  <a href="index.html" class="navbar-brand">
+    <img src="logo.jpg" alt="بن وقناد" class="logo-img"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+    <div class="brand-text">
+      <span class="brand-name">بن وقناد</span>
+      <span class="brand-since">منذ ٢٠٢٠</span>
+    </div>
+  </a>
+  <div class="navbar-actions">
+    <a href="index.html">🏪 المتجر</a>
+    <a href="admin.html" style="color:var(--accent-light)">⚙️ التحكم</a>
+  </div>
 </header>
 
 <div class="admin-layout">
-  <!-- Sidebar -->
+
+  <!-- ══ SIDEBAR ══ -->
   <aside class="admin-sidebar">
     <div class="sidebar-title">القائمة</div>
-    <a href="#" class="active" onclick="showSection('products')">📦 المنتجات</a>
-    <a href="#" onclick="showSection('stats')">📊 الإحصائيات</a>
+    <a href="#" data-section="products" class="active" onclick="switchSection(event,'products')">📦 المنتجات</a>
+    <a href="#" data-section="stats"    onclick="switchSection(event,'stats')">📊 الإحصائيات</a>
     <a href="index.html">🏪 المتجر</a>
   </aside>
 
-  <!-- Main -->
+  <!-- ══ MAIN ══ -->
   <main class="admin-main">
 
-    <!-- Stats Section -->
-    <div id="section-stats" style="display:none">
+    <!-- ── Stats ── -->
+    <div id="sec-stats" style="display:none">
       <div class="admin-header"><h2>📊 الإحصائيات</h2></div>
-      <div class="stats-row" id="statsRow">
-        <div class="stat-card"><div class="stat-num" id="statTotal">-</div><div class="stat-label">إجمالي المنتجات</div></div>
-        <div class="stat-card"><div class="stat-num" id="statAvail">-</div><div class="stat-label">متوفرة</div></div>
-        <div class="stat-card"><div class="stat-num" id="statHidden">-</div><div class="stat-label">مخفية</div></div>
-        <div class="stat-card"><div class="stat-num" id="statCats">-</div><div class="stat-label">الفئات</div></div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-num" id="stTotal">—</div><div class="stat-label">إجمالي المنتجات</div></div>
+        <div class="stat-card"><div class="stat-num" id="stOn">—</div><div class="stat-label">ظاهرة (ON)</div></div>
+        <div class="stat-card"><div class="stat-num" id="stOff">—</div><div class="stat-label">مخفية (OFF)</div></div>
+        <div class="stat-card"><div class="stat-num" id="stCats">—</div><div class="stat-label">الفئات</div></div>
       </div>
     </div>
 
-    <!-- Products Section -->
-    <div id="section-products">
+    <!-- ── Products ── -->
+    <div id="sec-products">
       <div class="admin-header">
         <h2>📦 إدارة المنتجات</h2>
-        <button class="btn btn-accent" onclick="openModal()">+ إضافة منتج</button>
+        <button class="btn btn-accent" onclick="openModal()">➕ إضافة منتج</button>
       </div>
 
       <div class="search-bar">
-        <input type="text" id="searchInput" placeholder="🔍 ابحث عن منتج..." oninput="filterTable()" />
-        <select id="catFilter" onchange="filterTable()">
+        <input  type="text"   id="searchQ"    placeholder="🔍 ابحث بالاسم…"       oninput="filterTable()" />
+        <select id="filterCat"                                                       onchange="filterTable()">
           <option value="">كل الفئات</option>
         </select>
-        <select id="availFilter" onchange="filterTable()">
+        <select id="filterAvail"                                                     onchange="filterTable()">
           <option value="">الكل</option>
-          <option value="true">متوفر فقط</option>
+          <option value="true">ظاهر فقط</option>
           <option value="false">مخفي فقط</option>
         </select>
       </div>
@@ -62,223 +71,355 @@
         <table>
           <thead>
             <tr>
-              <th>#</th>
+              <th style="width:50px">#</th>
+              <th style="width:50px">صورة</th>
               <th>الاسم</th>
               <th>الفئة</th>
               <th>السعر</th>
-              <th>الوصف</th>
               <th>الحالة</th>
               <th>إجراءات</th>
             </tr>
           </thead>
-          <tbody id="productsTable">
-            <tr><td colspan="7" style="text-align:center;padding:2rem">
+          <tbody id="tBody">
+            <tr><td colspan="7" style="text-align:center;padding:2.5rem">
               <div class="spinner" style="margin:auto"></div>
             </td></tr>
           </tbody>
         </table>
       </div>
-      <p id="tableCount" style="font-size:.82rem;color:var(--text-muted);margin-top:.5rem;padding-right:.25rem"></p>
+      <p class="table-info" id="tableInfo"></p>
     </div>
 
   </main>
 </div>
 
-<!-- Modal: Add / Edit Product -->
-<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+<!-- ══ MODAL: Add / Edit ══ -->
+<div class="modal-overlay" id="modalOverlay" onclick="overlayClick(event,'modalOverlay',closeModal)">
   <div class="modal">
-    <h3 id="modalTitle">إضافة منتج جديد</h3>
-    <div class="form-group">
-      <label>اسم المنتج *</label>
-      <input type="text" id="fName" placeholder="مثال: قهوة سعودية" />
-    </div>
-    <div class="form-group">
-      <label>الفئة *</label>
-      <input type="text" id="fCategory" placeholder="مثال: قهوة، شاي، أخرى" list="catsList" />
-      <datalist id="catsList"></datalist>
-    </div>
-    <div class="form-group">
-      <label>السعر (ريال) *</label>
-      <input type="number" id="fPrice" placeholder="0.00" min="0" step="0.01" />
-    </div>
-    <div class="form-group">
-      <label>الوصف</label>
-      <textarea id="fDescription" rows="3" placeholder="وصف اختياري..."></textarea>
-    </div>
-    <div class="form-group">
-      <label>الحالة</label>
-      <div class="checkbox-row">
-        <input type="checkbox" id="fAvailable" checked />
-        <label for="fAvailable" style="color:var(--text);font-weight:400">متوفر (ظاهر في المتجر)</label>
+    <h3 class="modal-title" id="modalTitle">➕ إضافة منتج جديد</h3>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>اسم المنتج *</label>
+        <input type="text" id="fName" placeholder="مثال: قهوة سعودية" />
+      </div>
+      <div class="form-group">
+        <label>الفئة *</label>
+        <input type="text" id="fCategory" placeholder="قهوة، شاي، أخرى…" list="catsDL" />
+        <datalist id="catsDL"></datalist>
       </div>
     </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>السعر (ريال) *</label>
+        <input type="number" id="fPrice" placeholder="0.00" min="0" step="0.01" />
+      </div>
+      <div class="form-group">
+        <label>الحالة</label>
+        <div class="checkbox-row" style="margin-top:.35rem">
+          <input type="checkbox" id="fAvail" checked />
+          <label for="fAvail">ظاهر في المتجر</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>الوصف</label>
+      <textarea id="fDesc" rows="2" placeholder="وصف اختياري…"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>صورة المنتج</label>
+      <div class="img-upload-area" id="uploadArea">
+        <input type="file" id="fImage" accept="image/*" onchange="previewImage(event)" />
+        <div id="uploadPlaceholder">
+          <div class="upload-icon">🖼️</div>
+          <p class="upload-text">اضغط لاختيار صورة أو اسحب وأفلت</p>
+        </div>
+        <img id="imgPreview" class="img-preview" alt="معاينة الصورة" />
+      </div>
+      <input type="text" id="fImageUrl" placeholder="أو الصق رابط الصورة هنا…"
+             style="margin-top:.5rem" oninput="previewFromUrl()" />
+    </div>
+
     <div class="modal-footer">
-      <button class="btn btn-accent" onclick="saveProduct()">💾 حفظ</button>
-      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+      <button class="btn btn-accent"   onclick="saveProduct()">💾 حفظ</button>
+      <button class="btn btn-outline"  onclick="closeModal()">إلغاء</button>
     </div>
   </div>
 </div>
 
-<!-- Delete Confirm Modal -->
-<div class="modal-overlay" id="deleteOverlay" onclick="closeDeleteOutside(event)">
+<!-- ══ MODAL: Delete confirm ══ -->
+<div class="modal-overlay" id="deleteOverlay" onclick="overlayClick(event,'deleteOverlay',closeDelete)">
   <div class="modal" style="max-width:360px;text-align:center">
-    <h3>⚠️ تأكيد الحذف</h3>
-    <p style="margin:.75rem 0 1.5rem;color:var(--text-muted)">هل أنت متأكد من حذف هذا المنتج؟ لا يمكن التراجع عن هذا الإجراء.</p>
+    <h3 class="modal-title" style="justify-content:center">⚠️ تأكيد الحذف</h3>
+    <p style="color:var(--text-muted);margin-bottom:1.5rem">
+      هل أنت متأكد من حذف هذا المنتج؟<br>
+      <strong id="deleteProductName"></strong><br><br>
+      لا يمكن التراجع عن هذا الإجراء.
+    </p>
     <div style="display:flex;gap:.75rem;justify-content:center">
-      <button class="btn btn-danger" onclick="confirmDelete()">نعم، احذف</button>
+      <button class="btn btn-danger"  onclick="confirmDelete()">نعم، احذف</button>
       <button class="btn btn-outline" onclick="closeDelete()">إلغاء</button>
     </div>
   </div>
 </div>
 
+<!-- ══ TOAST ══ -->
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js"></script>
 <script>
-  let products = [];
-  let editingId = null;
-  let deletingId = null;
+/* ════════════════════════════
+   State
+════════════════════════════ */
+let products   = [];
+let editingId  = null;
+let deletingId = null;
+let uploadedFile = null;
 
-  // ===== SECTION TOGGLE =====
-  function showSection(name) {
-    document.getElementById('section-products').style.display = name === 'products' ? 'block' : 'none';
-    document.getElementById('section-stats').style.display    = name === 'stats'    ? 'block' : 'none';
-    document.querySelectorAll('.admin-sidebar a').forEach(a => a.classList.remove('active'));
-    event.currentTarget.classList.add('active');
+/* ════════════════════════════
+   Init
+════════════════════════════ */
+loadProducts();
+
+async function loadProducts() {
+  const { data, error } = await supabase.from('products').select('*').order('id');
+  if (error) { showToast('خطأ في تحميل البيانات', 'error'); return; }
+  products = data;
+  renderTable(products);
+  updateStats();
+  populateCatOptions();
+}
+
+/* ════════════════════════════
+   Stats
+════════════════════════════ */
+function updateStats() {
+  const on   = products.filter(p => p.Available).length;
+  const cats = new Set(products.map(p => p.Category)).size;
+  document.getElementById('stTotal').textContent = products.length;
+  document.getElementById('stOn').textContent    = on;
+  document.getElementById('stOff').textContent   = products.length - on;
+  document.getElementById('stCats').textContent  = cats;
+}
+
+/* ════════════════════════════
+   Sections
+════════════════════════════ */
+function switchSection(e, name) {
+  e.preventDefault();
+  document.getElementById('sec-products').style.display = name === 'products' ? 'block' : 'none';
+  document.getElementById('sec-stats').style.display    = name === 'stats'    ? 'block' : 'none';
+  document.querySelectorAll('.admin-sidebar a[data-section]').forEach(a =>
+    a.classList.toggle('active', a.dataset.section === name));
+}
+
+/* ════════════════════════════
+   Category options
+════════════════════════════ */
+function populateCatOptions() {
+  const cats = [...new Set(products.map(p => p.Category).filter(Boolean))].sort();
+
+  const sel = document.getElementById('filterCat');
+  sel.innerHTML = '<option value="">كل الفئات</option>' +
+    cats.map(c => `<option value="${c}">${c}</option>`).join('');
+
+  document.getElementById('catsDL').innerHTML =
+    cats.map(c => `<option value="${c}">`).join('');
+}
+
+/* ════════════════════════════
+   Table render
+════════════════════════════ */
+function renderTable(list) {
+  document.getElementById('tableInfo').textContent =
+    `عرض ${list.length} من ${products.length} منتج`;
+
+  const tbody = document.getElementById('tBody');
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد نتائج</td></tr>`;
+    return;
   }
 
-  // ===== LOAD =====
-  async function loadProducts() {
-    const { data, error } = await supabase.from('products').select('*').order('id');
-    if (error) { showToast('خطأ في تحميل البيانات', 'error'); return; }
-    products = data;
-    renderTable(products);
-    updateStats();
-    populateCatFilter();
-  }
+  tbody.innerHTML = list.map(p => {
+    const price = typeof p.Price === 'number' ? p.Price.toFixed(2) : parseFloat(p.Price||0).toFixed(2);
+    const thumb = p.image_url
+      ? `<div class="tbl-thumb"><img src="${p.image_url}" alt="${p.Name}" /></div>`
+      : `<div class="tbl-thumb">🛍</div>`;
 
-  function updateStats() {
-    const avail = products.filter(p => p.Available).length;
-    const cats  = new Set(products.map(p => p.Category)).size;
-    document.getElementById('statTotal').textContent = products.length;
-    document.getElementById('statAvail').textContent = avail;
-    document.getElementById('statHidden').textContent = products.length - avail;
-    document.getElementById('statCats').textContent = cats;
-  }
-
-  function populateCatFilter() {
-    const cats = [...new Set(products.map(p => p.Category))].sort();
-    const sel  = document.getElementById('catFilter');
-    sel.innerHTML = '<option value="">كل الفئات</option>' +
-      cats.map(c => `<option value="${c}">${c}</option>`).join('');
-
-    const dl = document.getElementById('catsList');
-    dl.innerHTML = cats.map(c => `<option value="${c}">`).join('');
-  }
-
-  // ===== RENDER TABLE =====
-  function renderTable(list) {
-    const tbody = document.getElementById('productsTable');
-    document.getElementById('tableCount').textContent = `عرض ${list.length} من ${products.length} منتج`;
-
-    if (!list.length) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد نتائج</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = list.map(p => `
-      <tr>
-        <td style="color:var(--text-muted);font-size:.8rem">${p.id}</td>
-        <td><strong>${p.Name}</strong></td>
-        <td><span style="background:var(--bg);padding:.2rem .6rem;border-radius:1rem;font-size:.8rem">${p.Category}</span></td>
-        <td style="font-weight:600;color:var(--accent)">${p.Price.toFixed(2)} ر</td>
-        <td style="font-size:.8rem;color:var(--text-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-          ${p.Description || '—'}
-        </td>
-        <td>
-          <button class="toggle-btn ${p.Available ? 'on' : 'off'}"
-            onclick="toggleAvailable(${p.id}, ${p.Available})"
-            title="${p.Available ? 'إخفاء المنتج' : 'إظهار المنتج'}">
+    return `<tr>
+      <td style="color:var(--text-muted);font-size:.78rem">${p.id}</td>
+      <td>${thumb}</td>
+      <td><strong>${p.Name}</strong></td>
+      <td>
+        <span style="background:var(--bg);padding:.18rem .55rem;border-radius:1rem;font-size:.8rem">
+          ${p.Category||'—'}
+        </span>
+      </td>
+      <td style="font-weight:700;color:var(--accent)">${price} ر</td>
+      <td>
+        <div class="toggle-wrap">
+          <button class="toggle-btn ${p.Available?'on':'off'}"
+            onclick="toggleAvail(${p.id},${p.Available})"
+            title="${p.Available?'إخفاء':'إظهار'}">
           </button>
-        </td>
-        <td>
-          <div class="actions-cell">
-            <button class="btn btn-sm btn-outline" onclick="openModal(${p.id})">✏️ تعديل</button>
-            <button class="btn btn-sm btn-danger"  onclick="openDelete(${p.id})">🗑️</button>
-          </div>
-        </td>
-      </tr>
-    `).join('');
-  }
+          <span class="toggle-label">${p.Available?'ظاهر':'مخفي'}</span>
+        </div>
+      </td>
+      <td>
+        <div class="actions-cell">
+          <button class="btn btn-sm btn-outline" onclick="openModal(${p.id})">✏️ تعديل</button>
+          <button class="btn btn-sm btn-danger"  onclick="openDelete(${p.id})">🗑️</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
 
-  // ===== FILTER =====
-  function filterTable() {
-    const q    = document.getElementById('searchInput').value.toLowerCase();
-    const cat  = document.getElementById('catFilter').value;
-    const avail = document.getElementById('availFilter').value;
+/* ════════════════════════════
+   Filter
+════════════════════════════ */
+function filterTable() {
+  const q     = document.getElementById('searchQ').value.toLowerCase();
+  const cat   = document.getElementById('filterCat').value;
+  const avail = document.getElementById('filterAvail').value;
 
-    const filtered = products.filter(p => {
-      const matchQ = p.Name.toLowerCase().includes(q) ||
-                     (p.Description || '').toLowerCase().includes(q);
-      const matchCat   = !cat   || p.Category === cat;
-      const matchAvail = avail === '' || String(p.Available) === avail;
-      return matchQ && matchCat && matchAvail;
-    });
-    renderTable(filtered);
-  }
+  const filtered = products.filter(p => {
+    const mQ = !q || p.Name.toLowerCase().includes(q) || (p.Description||'').toLowerCase().includes(q);
+    const mC = !cat   || p.Category === cat;
+    const mA = avail === '' || String(p.Available) === avail;
+    return mQ && mC && mA;
+  });
+  renderTable(filtered);
+}
 
-  // ===== TOGGLE AVAILABLE =====
-  async function toggleAvailable(id, current) {
-    const { error } = await supabase
-      .from('products')
-      .update({ Available: !current })
-      .eq('id', id);
-    if (error) { showToast('فشل تحديث الحالة', 'error'); return; }
-    products = products.map(p => p.id === id ? { ...p, Available: !current } : p);
-    filterTable();
-    updateStats();
-    showToast(!current ? '✅ المنتج أصبح متوفراً' : '🔴 تم إخفاء المنتج', 'success');
-  }
+/* ════════════════════════════
+   Toggle Available
+════════════════════════════ */
+async function toggleAvail(id, current) {
+  const { error } = await supabase.from('products').update({ Available: !current }).eq('id', id);
+  if (error) { showToast('فشل تحديث الحالة', 'error'); return; }
+  products = products.map(p => p.id === id ? { ...p, Available: !current } : p);
+  filterTable();
+  updateStats();
+  showToast(!current ? '✅ المنتج أصبح ظاهراً' : '🔴 تم إخفاء المنتج', 'success');
+}
 
-  // ===== MODAL =====
-  function openModal(id = null) {
-    editingId = id;
-    const modal = document.getElementById('modalOverlay');
-    document.getElementById('modalTitle').textContent = id ? '✏️ تعديل المنتج' : '➕ إضافة منتج جديد';
+/* ════════════════════════════
+   Modal (Add / Edit)
+════════════════════════════ */
+function openModal(id = null) {
+  editingId    = id;
+  uploadedFile = null;
+  const preview = document.getElementById('imgPreview');
+  const ph      = document.getElementById('uploadPlaceholder');
+  preview.style.display = 'none';
+  ph.style.display = 'block';
+  document.getElementById('fImage').value = '';
 
-    if (id) {
-      const p = products.find(x => x.id === id);
-      document.getElementById('fName').value        = p.Name;
-      document.getElementById('fCategory').value    = p.Category;
-      document.getElementById('fPrice').value       = p.Price;
-      document.getElementById('fDescription').value = p.Description || '';
-      document.getElementById('fAvailable').checked = p.Available;
-    } else {
-      document.getElementById('fName').value        = '';
-      document.getElementById('fCategory').value    = '';
-      document.getElementById('fPrice').value       = '';
-      document.getElementById('fDescription').value = '';
-      document.getElementById('fAvailable').checked = true;
+  document.getElementById('modalTitle').textContent = id ? '✏️ تعديل المنتج' : '➕ إضافة منتج جديد';
+
+  if (id) {
+    const p = products.find(x => x.id === id);
+    document.getElementById('fName').value     = p.Name;
+    document.getElementById('fCategory').value = p.Category || '';
+    document.getElementById('fPrice').value    = p.Price;
+    document.getElementById('fDesc').value     = p.Description || '';
+    document.getElementById('fAvail').checked  = p.Available;
+    document.getElementById('fImageUrl').value = p.image_url || '';
+    if (p.image_url) {
+      preview.src = p.image_url;
+      preview.style.display = 'block';
+      ph.style.display = 'none';
     }
-    modal.classList.add('open');
+  } else {
+    document.getElementById('fName').value     = '';
+    document.getElementById('fCategory').value = '';
+    document.getElementById('fPrice').value    = '';
+    document.getElementById('fDesc').value     = '';
+    document.getElementById('fAvail').checked  = true;
+    document.getElementById('fImageUrl').value = '';
   }
 
-  function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
-  function closeModalOutside(e) { if (e.target === document.getElementById('modalOverlay')) closeModal(); }
+  document.getElementById('modalOverlay').classList.add('open');
+}
 
-  async function saveProduct() {
-    const name  = document.getElementById('fName').value.trim();
-    const cat   = document.getElementById('fCategory').value.trim();
-    const price = parseFloat(document.getElementById('fPrice').value);
-    const desc  = document.getElementById('fDescription').value.trim();
-    const avail = document.getElementById('fAvailable').checked;
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
 
-    if (!name || !cat || isNaN(price)) {
-      showToast('يرجى ملء جميع الحقول المطلوبة', 'error'); return;
+/* ── Image preview (file) ── */
+function previewImage(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  uploadedFile = file;
+  const preview = document.getElementById('imgPreview');
+  const ph      = document.getElementById('uploadPlaceholder');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  ph.style.display = 'none';
+  document.getElementById('fImageUrl').value = '';
+}
+
+/* ── Image preview (URL) ── */
+function previewFromUrl() {
+  const url = document.getElementById('fImageUrl').value.trim();
+  const preview = document.getElementById('imgPreview');
+  const ph      = document.getElementById('uploadPlaceholder');
+  if (url) {
+    uploadedFile = null;
+    document.getElementById('fImage').value = '';
+    preview.src = url;
+    preview.style.display = 'block';
+    ph.style.display = 'none';
+  } else {
+    preview.style.display = 'none';
+    ph.style.display = 'block';
+  }
+}
+
+/* ── Upload image to Supabase Storage ── */
+async function uploadImage(file) {
+  const ext  = file.name.split('.').pop();
+  const path = `products/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from('product-images').upload(path, file, {
+    cacheControl: '3600', upsert: false
+  });
+  if (error) throw new Error('فشل رفع الصورة: ' + error.message);
+  const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+/* ── Save (insert / update) ── */
+async function saveProduct() {
+  const name  = document.getElementById('fName').value.trim();
+  const cat   = document.getElementById('fCategory').value.trim();
+  const price = parseFloat(document.getElementById('fPrice').value);
+  const desc  = document.getElementById('fDesc').value.trim();
+  const avail = document.getElementById('fAvail').checked;
+
+  if (!name || !cat || isNaN(price) || price < 0) {
+    showToast('⚠️ يرجى ملء الاسم والفئة والسعر بشكل صحيح', 'error');
+    return;
+  }
+
+  const saveBtn = document.querySelector('#modalOverlay .btn-accent');
+  saveBtn.textContent = '⏳ جاري الحفظ…';
+  saveBtn.disabled = true;
+
+  try {
+    /* Resolve image URL */
+    let imageUrl = document.getElementById('fImageUrl').value.trim() || null;
+    if (uploadedFile) {
+      imageUrl = await uploadImage(uploadedFile);
     }
 
-    const payload = { Name: name, Category: cat, Price: price, Description: desc || null, Available: avail };
+    const payload = {
+      Name: name, Category: cat, Price: price,
+      Description: desc || null, Available: avail,
+      ...(imageUrl !== undefined ? { image_url: imageUrl } : {})
+    };
 
     let error;
     if (editingId) {
@@ -287,39 +428,53 @@
       ({ error } = await supabase.from('products').insert([payload]));
     }
 
-    if (error) { showToast('فشل الحفظ: ' + error.message, 'error'); return; }
+    if (error) throw new Error(error.message);
 
     closeModal();
     showToast(editingId ? '✅ تم تحديث المنتج' : '✅ تمت إضافة المنتج', 'success');
     await loadProducts();
-  }
 
-  // ===== DELETE =====
-  function openDelete(id) {
-    deletingId = id;
-    document.getElementById('deleteOverlay').classList.add('open');
+  } catch (err) {
+    showToast('❌ ' + err.message, 'error');
+  } finally {
+    saveBtn.textContent = '💾 حفظ';
+    saveBtn.disabled = false;
   }
-  function closeDelete() { document.getElementById('deleteOverlay').classList.remove('open'); }
-  function closeDeleteOutside(e) { if (e.target === document.getElementById('deleteOverlay')) closeDelete(); }
+}
 
-  async function confirmDelete() {
-    const { error } = await supabase.from('products').delete().eq('id', deletingId);
-    if (error) { showToast('فشل الحذف: ' + error.message, 'error'); return; }
-    closeDelete();
-    showToast('🗑️ تم حذف المنتج', 'success');
-    await loadProducts();
-  }
+/* ════════════════════════════
+   Delete
+════════════════════════════ */
+function openDelete(id) {
+  deletingId = id;
+  const p = products.find(x => x.id === id);
+  document.getElementById('deleteProductName').textContent = p ? p.Name : '';
+  document.getElementById('deleteOverlay').classList.add('open');
+}
+function closeDelete() { document.getElementById('deleteOverlay').classList.remove('open'); }
 
-  // ===== TOAST =====
-  function showToast(msg, type = '') {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'toast ' + type;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 3000);
-  }
+async function confirmDelete() {
+  const { error } = await supabase.from('products').delete().eq('id', deletingId);
+  if (error) { showToast('❌ فشل الحذف: ' + error.message, 'error'); return; }
+  closeDelete();
+  showToast('🗑️ تم حذف المنتج', 'success');
+  await loadProducts();
+}
 
-  loadProducts();
+/* ════════════════════════════
+   Helpers
+════════════════════════════ */
+function overlayClick(e, overlayId, closeFn) {
+  if (e.target.id === overlayId) closeFn();
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type + ' show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 3000);
+}
 </script>
 </body>
 </html>

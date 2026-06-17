@@ -8,29 +8,43 @@
 </head>
 <body>
 
+<!-- ══ NAVBAR ══ -->
 <header class="navbar">
-  <a href="index.html" class="logo">☕ بن وقناد</a>
-  <nav>
-    <a href="index.html">المتجر</a>
+  <a href="index.html" class="navbar-brand">
+    <img src="logo.jpg" alt="بن وقناد" class="logo-img"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+    <div class="brand-text">
+      <span class="brand-name">بن وقناد</span>
+      <span class="brand-since">منذ ٢٠٢٠</span>
+    </div>
+  </a>
+  <div class="navbar-actions">
     <a href="admin.html">لوحة التحكم</a>
-  </nav>
+    <button class="cart-btn" onclick="openCart()">
+      🛒 السلة
+      <span class="cart-count" id="cartCount" style="display:none">0</span>
+    </button>
+  </div>
 </header>
 
+<!-- ══ HERO ══ -->
 <section class="hero">
   <h1>☕ بن وقناد</h1>
   <p>أجود أنواع القهوة والشاي — مباشرة لطاولتك</p>
 </section>
 
+<!-- ══ FILTERS ══ -->
 <div class="filters" id="filters">
   <button class="filter-btn active" data-cat="all">الكل</button>
 </div>
 
+<!-- ══ PRODUCTS ══ -->
 <section class="products-section">
   <h2 class="section-title">🛍 المنتجات</h2>
   <div class="products-grid" id="productsGrid">
-    <div class="loading-state" style="grid-column:1/-1">
+    <div class="loading-state">
       <div class="spinner"></div>
-      <p>جاري تحميل المنتجات...</p>
+      <p>جاري تحميل المنتجات…</p>
     </div>
   </div>
 </section>
@@ -39,75 +53,240 @@
   <p>© 2026 بن وقناد — جميع الحقوق محفوظة</p>
 </footer>
 
+<!-- ══ CART SIDEBAR ══ -->
+<div class="cart-overlay" id="cartOverlay" onclick="handleCartOverlayClick(event)">
+  <aside class="cart-sidebar">
+    <div class="cart-header">
+      <h3>🛒 سلة المشتريات</h3>
+      <button class="cart-close-btn" onclick="closeCart()">✕</button>
+    </div>
+
+    <div class="cart-items" id="cartItems">
+      <div class="cart-empty">السلة فارغة</div>
+    </div>
+
+    <div class="cart-footer" id="cartFooter" style="display:none">
+      <div class="cart-total">
+        <span>المجموع:</span>
+        <span id="cartTotal">0.00 ريال</span>
+      </div>
+      <button class="checkout-btn">إتمام الطلب ✓</button>
+    </div>
+  </aside>
+</div>
+
+<!-- ══ TOAST ══ -->
+<div class="toast" id="toast"></div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js"></script>
 <script>
-  const grid     = document.getElementById('productsGrid');
+/* ─── Icons fallback ─── */
+const ICONS = {
+  'قهوة':'☕','شاي':'🍵','بن':'🫘','هيل':'🌿',
+  'زعفران':'🌸','عطر':'🌺','توابل':'🌶️','أخرى':'🛍'
+};
+function getIcon(name, cat) {
+  for (const [k, v] of Object.entries(ICONS))
+    if (name.includes(k) || (cat||'').includes(k)) return v;
+  return '🛍';
+}
+
+/* ─── State ─── */
+let allProducts = [];
+let cart = JSON.parse(localStorage.getItem('bnwgnad_cart') || '[]');
+
+/* ─── Load products ─── */
+async function loadProducts() {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('Available', true)
+    .order('Name');
+
+  const grid = document.getElementById('productsGrid');
+
+  if (error) {
+    grid.innerHTML = '<div class="empty-state"><p>حدث خطأ أثناء تحميل المنتجات</p></div>';
+    return;
+  }
+
+  allProducts = data;
+  buildFilters(data);
+  renderProducts(data);
+}
+
+/* ─── Filters ─── */
+function buildFilters(data) {
   const filtersEl = document.getElementById('filters');
-  let allProducts = [];
-
-  const icons = {
-    'قهوة': '☕', 'شاي': '🍵', 'بن': '🫘', 'هيل': '🌿',
-    'زعفران': '🌸', 'عطر': '🌺', 'أخرى': '🛍', 'توابل': '🌶️'
-  };
-
-  function getIcon(name, cat) {
-    for (const [k, v] of Object.entries(icons)) {
-      if (name.includes(k) || cat.includes(k)) return v;
-    }
-    return icons['أخرى'];
-  }
-
-  function renderProducts(list) {
-    if (!list.length) {
-      grid.innerHTML = '<div class="empty-state"><p>لا توجد منتجات في هذه الفئة</p></div>';
-      return;
-    }
-    grid.innerHTML = list.filter(p => p.Available).map(p => `
-      <div class="product-card">
-        <span class="badge badge-available">متوفر</span>
-        <div class="product-icon">${getIcon(p.Name, p.Category)}</div>
-        <h3>${p.Name}</h3>
-        <p class="category">${p.Category}</p>
-        ${p.Description ? `<p class="description">${p.Description}</p>` : ''}
-        <p class="price">${p.Price.toFixed(2)} <span>ريال</span></p>
-      </div>
-    `).join('');
-  }
-
-  async function loadProducts() {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .order('Name');
-
-    if (error) {
-      grid.innerHTML = '<div class="empty-state"><p>حدث خطأ أثناء تحميل المنتجات</p></div>';
-      return;
-    }
-
-    allProducts = data;
-
-    const cats = ['all', ...new Set(data.map(p => p.Category))];
-    filtersEl.innerHTML = cats.map(c =>
-      `<button class="filter-btn ${c === 'all' ? 'active' : ''}" data-cat="${c}">
-        ${c === 'all' ? 'الكل' : c}
-      </button>`
-    ).join('');
-
-    filtersEl.querySelectorAll('.filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        filtersEl.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const cat = btn.dataset.cat;
-        renderProducts(cat === 'all' ? allProducts : allProducts.filter(p => p.Category === cat));
-      });
+  const cats = ['all', ...new Set(data.map(p => p.Category).filter(Boolean))];
+  filtersEl.innerHTML = cats.map(c =>
+    `<button class="filter-btn ${c==='all'?'active':''}" data-cat="${c}">
+       ${c==='all'?'الكل':c}
+     </button>`
+  ).join('');
+  filtersEl.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      filtersEl.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const cat = btn.dataset.cat;
+      renderProducts(cat==='all' ? allProducts : allProducts.filter(p => p.Category===cat));
     });
+  });
+}
 
-    renderProducts(allProducts);
+/* ─── Render products ─── */
+function renderProducts(list) {
+  const grid = document.getElementById('productsGrid');
+  if (!list.length) {
+    grid.innerHTML = '<div class="empty-state"><p>لا توجد منتجات في هذه الفئة</p></div>';
+    return;
   }
 
-  loadProducts();
+  grid.innerHTML = list.map(p => {
+    const price = typeof p.Price === 'number' ? p.Price.toFixed(2) : parseFloat(p.Price||0).toFixed(2);
+    const inCart = cart.find(c => c.id === p.id);
+    const imgHtml = p.image_url
+      ? `<img src="${p.image_url}" alt="${p.Name}" loading="lazy" />`
+      : `<span class="product-icon-fallback">${getIcon(p.Name, p.Category)}</span>`;
+
+    return `
+    <div class="product-card" id="card-${p.id}">
+      <div class="product-img-wrap">${imgHtml}</div>
+      <h3>${p.Name}</h3>
+      <p class="category">${p.Category||''}</p>
+      ${p.Description ? `<p class="description">${p.Description}</p>` : ''}
+      <div class="price-row">
+        <p class="price">${price} <span>ريال</span></p>
+        <button class="add-btn ${inCart?'added':''}"
+          onclick="addToCart(${p.id})"
+          id="addbtn-${p.id}">
+          ${inCart ? '✓ أُضيف' : '+ أضف'}
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Cart logic ─── */
+function saveCart() {
+  localStorage.setItem('bnwgnad_cart', JSON.stringify(cart));
+  updateCartCount();
+}
+
+function updateCartCount() {
+  const total = cart.reduce((s, i) => s + i.qty, 0);
+  const badge = document.getElementById('cartCount');
+  badge.textContent = total;
+  badge.style.display = total > 0 ? 'flex' : 'none';
+}
+
+function addToCart(id) {
+  const product = allProducts.find(p => p.id === id);
+  if (!product) return;
+  const existing = cart.find(c => c.id === id);
+  if (existing) {
+    existing.qty++;
+  } else {
+    cart.push({
+      id: product.id,
+      name: product.Name,
+      price: typeof product.Price === 'number' ? product.Price : parseFloat(product.Price||0),
+      image: product.image_url || null,
+      icon: getIcon(product.Name, product.Category),
+      qty: 1
+    });
+  }
+  saveCart();
+
+  const btn = document.getElementById(`addbtn-${id}`);
+  if (btn) { btn.textContent = '✓ أُضيف'; btn.classList.add('added'); }
+
+  showToast(`تمت إضافة "${product.Name}" للسلة 🛒`, 'success');
+  renderCartItems();
+}
+
+function changeQty(id, delta) {
+  const item = cart.find(c => c.id === id);
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) cart = cart.filter(c => c.id !== id);
+  saveCart();
+  renderCartItems();
+
+  // update add button state
+  const btn = document.getElementById(`addbtn-${id}`);
+  if (btn) {
+    const still = cart.find(c => c.id === id);
+    btn.textContent = still ? '✓ أُضيف' : '+ أضف';
+    still ? btn.classList.add('added') : btn.classList.remove('added');
+  }
+}
+
+function removeFromCart(id) { changeQty(id, -999); }
+
+function renderCartItems() {
+  const el     = document.getElementById('cartItems');
+  const footer = document.getElementById('cartFooter');
+
+  if (!cart.length) {
+    el.innerHTML = '<div class="cart-empty">🛒<br><br>السلة فارغة</div>';
+    footer.style.display = 'none';
+    return;
+  }
+
+  el.innerHTML = cart.map(item => {
+    const imgHtml = item.image
+      ? `<img src="${item.image}" alt="${item.name}" />`
+      : item.icon;
+    return `
+    <div class="cart-item">
+      <div class="cart-item-img">${imgHtml}</div>
+      <div class="cart-item-info">
+        <h4>${item.name}</h4>
+        <p class="item-price">${(item.price * item.qty).toFixed(2)} ريال</p>
+      </div>
+      <div class="qty-ctrl">
+        <button class="qty-btn" onclick="changeQty(${item.id}, -1)">−</button>
+        <span class="qty-num">${item.qty}</span>
+        <button class="qty-btn" onclick="changeQty(${item.id}, 1)">+</button>
+      </div>
+      <button class="cart-item-remove" onclick="removeFromCart(${item.id})" title="حذف">✕</button>
+    </div>`;
+  }).join('');
+
+  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  document.getElementById('cartTotal').textContent = `${total.toFixed(2)} ريال`;
+  footer.style.display = 'block';
+}
+
+/* ─── Cart open/close ─── */
+function openCart()  {
+  renderCartItems();
+  document.getElementById('cartOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeCart() {
+  document.getElementById('cartOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function handleCartOverlayClick(e) {
+  if (e.target === document.getElementById('cartOverlay')) closeCart();
+}
+
+/* ─── Toast ─── */
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ─── Init ─── */
+updateCartCount();
+loadProducts();
 </script>
 </body>
 </html>
