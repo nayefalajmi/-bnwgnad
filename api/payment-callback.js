@@ -1,30 +1,57 @@
 import crypto from 'crypto';
+import https  from 'https';
 
-const SECRET_KEY   = process.env.HESABE_SECRET_KEY;
-const IV_KEY       = process.env.HESABE_IV_KEY;
-const SUPABASE_URL = 'https://ymopznkoddniibrxbeav.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_6tFnUzqgHYp2Zu3Px4YAtw_QJLLWiOk';
+const SECRET_KEY = process.env.HESABE_SECRET_KEY;
+const IV_KEY     = process.env.HESABE_IV_KEY;
+const SB_HOST    = 'ymopznkoddniibrxbeav.supabase.co';
+const SB_KEY     = 'sb_publishable_6tFnUzqgHYp2Zu3Px4YAtw_QJLLWiOk';
 
+/* ── AES-256-CBC decrypt ── */
 function decrypt(data) {
-  const key      = Buffer.from(SECRET_KEY, 'utf8');
-  const iv       = Buffer.from(IV_KEY,     'utf8');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-  return JSON.parse(decipher.update(data, 'base64', 'utf8') + decipher.final('utf8'));
+  const decipher = crypto.createDecipheriv(
+    'aes-256-cbc',
+    Buffer.from(SECRET_KEY, 'utf8'),
+    Buffer.from(IV_KEY,     'utf8')
+  );
+  const plain = decipher.update(data, 'base64', 'utf8') + decipher.final('utf8');
+  return JSON.parse(plain);
 }
 
+/* ── HTTPS PATCH (no fetch dependency) ── */
+function httpsPatch(hostname, path, body, extraHeaders = {}) {
+  return new Promise((resolve, reject) => {
+    const bodyStr = JSON.stringify(body);
+    const req = https.request(
+      {
+        hostname,
+        path,
+        method: 'PATCH',
+        headers: {
+          'Content-Type':   'application/json',
+          'Content-Length': Buffer.byteLength(bodyStr),
+          ...extraHeaders,
+        },
+      },
+      (res) => { res.resume(); resolve(res.statusCode); }
+    );
+    req.on('error', reject);
+    req.setTimeout(10000, () => req.destroy(new Error('timeout')));
+    req.write(bodyStr);
+    req.end();
+  });
+}
+
+/* ── Update order status in Supabase ── */
 async function updateOrderStatus(orderRef, status) {
   try {
-    await fetch(
-      `${SUPABASE_URL}/rest/v1/orders?order_ref=eq.${encodeURIComponent(orderRef)}`,
+    await httpsPatch(
+      SB_HOST,
+      `/rest/v1/orders?order_ref=eq.${encodeURIComponent(orderRef)}`,
+      { status },
       {
-        method:  'PATCH',
-        headers: {
-          'Content-Type':  'application/json',
-          'apikey':        SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Prefer':        'return=minimal',
-        },
-        body: JSON.stringify({ status }),
+        'apikey':        SB_KEY,
+        'Authorization': `Bearer ${SB_KEY}`,
+        'Prefer':        'return=minimal',
       }
     );
   } catch (e) {
@@ -32,6 +59,7 @@ async function updateOrderStatus(orderRef, status) {
   }
 }
 
+/* ── Handler ── */
 export default async function handler(req, res) {
   try {
     const raw = req.method === 'POST' ? req.body?.data : req.query?.data;
@@ -52,7 +80,9 @@ export default async function handler(req, res) {
 
     if (orderRef) await updateOrderStatus(orderRef, 'cancelled');
     return res.redirect(302, `/payment-failed.html?reason=${result?.status || 'unknown'}`);
+
   } catch (err) {
+    console.error('Callback error:', err.message);
     return res.redirect(302, '/payment-failed.html?reason=error');
   }
 }
