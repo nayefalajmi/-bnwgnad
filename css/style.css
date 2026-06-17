@@ -872,6 +872,39 @@ tbody td { padding: .6rem 1rem; font-size: .86rem; vertical-align: middle; }
   gap: .75rem;
 }
 
+.pay-method-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .75rem;
+  margin-top: .35rem;
+}
+
+.pay-method-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  padding: .85rem .5rem;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: #fff;
+  font-size: .95rem;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all .2s;
+}
+.pay-method-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.pay-method-btn.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
 .addr-summary {
   margin-top: 1rem;
 }

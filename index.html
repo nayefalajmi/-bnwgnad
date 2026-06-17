@@ -117,8 +117,21 @@
     <!-- Order summary inside modal -->
     <div class="addr-summary" id="addrSummary"></div>
 
+    <!-- Payment method -->
+    <div class="form-group" style="margin-top:1rem">
+      <label>طريقة الدفع *</label>
+      <div class="pay-method-row">
+        <button class="pay-method-btn active" id="pmCard" onclick="selectPayMethod('card')">
+          💳 دفع بالبطاقة
+        </button>
+        <button class="pay-method-btn" id="pmCash" onclick="selectPayMethod('cash')">
+          💵 كاش عند الاستلام
+        </button>
+      </div>
+    </div>
+
     <div class="modal-footer">
-      <button class="btn btn-accent" id="payBtn" onclick="submitAddress()">الدفع عبر Hesabe ←</button>
+      <button class="btn btn-accent" id="payBtn" onclick="submitAddress()">الدفع بالبطاقة ←</button>
       <button class="btn btn-outline" onclick="closeAddress()">رجوع</button>
     </div>
   </div>
@@ -329,6 +342,17 @@ function handleCartOverlayClick(e) {
 /* ════════════════════════════
    ADDRESS MODAL
 ════════════════════════════ */
+/* ─── Payment method ─── */
+let selectedPayMethod = 'card';
+
+function selectPayMethod(method) {
+  selectedPayMethod = method;
+  document.getElementById('pmCard').classList.toggle('active', method === 'card');
+  document.getElementById('pmCash').classList.toggle('active', method === 'cash');
+  document.getElementById('payBtn').textContent =
+    method === 'card' ? 'الدفع بالبطاقة ←' : 'تأكيد الطلب ✓';
+}
+
 function startCheckout() {
   if (!cart.length) return;
 
@@ -350,9 +374,10 @@ function startCheckout() {
     </div>`;
   document.getElementById('addrSummary').innerHTML = summaryHtml;
 
-  /* Reset pay button */
+  /* Reset pay button & method */
+  selectedPayMethod = 'card';
+  selectPayMethod('card');
   const btn = document.getElementById('payBtn');
-  btn.textContent = 'الدفع عبر Hesabe ←';
   btn.disabled = false;
 
   closeCart();
@@ -380,13 +405,23 @@ async function submitAddress() {
   }
 
   const btn = document.getElementById('payBtn');
-  btn.textContent = '⏳ جاري التوجيه…';
   btn.disabled = true;
 
   const total    = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const orderRef = 'ORD-' + Date.now();
   const address  = `${area}، ${street}، ${building}${flat ? ' ش'+flat : ''}`;
 
+  /* ── كاش: أكّد الطلب مباشرة ── */
+  if (selectedPayMethod === 'cash') {
+    btn.textContent = '⏳ جاري التأكيد…';
+    const params = new URLSearchParams({ ref: orderRef, amount: total.toFixed(3), method: 'cash' });
+    localStorage.removeItem('bnwgnad_cart');
+    window.location.href = `/payment-success.html?${params}`;
+    return;
+  }
+
+  /* ── بطاقة: وجّه لـ Hesabe ── */
+  btn.textContent = '⏳ جاري التوجيه…';
   try {
     const res = await fetch('/api/create-payment', {
       method: 'POST',
@@ -405,12 +440,12 @@ async function submitAddress() {
       window.location.href = data.paymentUrl;
     } else {
       showToast('❌ ' + (data.error || 'حدث خطأ في بوابة الدفع'), 'error');
-      btn.textContent = 'الدفع عبر Hesabe ←';
+      btn.textContent = 'الدفع بالبطاقة ←';
       btn.disabled = false;
     }
   } catch {
     showToast('❌ تعذّر الاتصال ببوابة الدفع', 'error');
-    btn.textContent = 'الدفع عبر Hesabe ←';
+    btn.textContent = 'الدفع بالبطاقة ←';
     btn.disabled = false;
   }
 }
