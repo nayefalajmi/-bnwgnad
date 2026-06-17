@@ -59,11 +59,9 @@
       <h3>🛒 سلة المشتريات</h3>
       <button class="cart-close-btn" onclick="closeCart()">✕</button>
     </div>
-
     <div class="cart-items" id="cartItems">
       <div class="cart-empty">السلة فارغة</div>
     </div>
-
     <div class="cart-footer" id="cartFooter" style="display:none">
       <div class="cart-total">
         <span>المجموع:</span>
@@ -74,13 +72,65 @@
   </aside>
 </div>
 
+<!-- ══ ADDRESS MODAL ══ -->
+<div class="modal-overlay" id="addressOverlay" onclick="if(event.target===this)closeAddress()">
+  <div class="modal" style="max-width:520px">
+    <h3 class="modal-title">📦 عنوان التوصيل</h3>
+
+    <div class="addr-form">
+      <div class="addr-row">
+        <div class="form-group">
+          <label>الاسم الكامل *</label>
+          <input type="text" id="aName" placeholder="محمد العلي" />
+        </div>
+        <div class="form-group">
+          <label>رقم الهاتف *</label>
+          <input type="tel" id="aPhone" placeholder="965XXXXXXXX+" dir="ltr" />
+        </div>
+      </div>
+      <div class="addr-row">
+        <div class="form-group">
+          <label>المنطقة *</label>
+          <input type="text" id="aArea" placeholder="السالمية، حولي…" />
+        </div>
+        <div class="form-group">
+          <label>الشارع *</label>
+          <input type="text" id="aStreet" placeholder="شارع الخليج" />
+        </div>
+      </div>
+      <div class="addr-row">
+        <div class="form-group">
+          <label>رقم المنزل / البناية *</label>
+          <input type="text" id="aBuilding" placeholder="١٢" />
+        </div>
+        <div class="form-group">
+          <label>رقم الشقة</label>
+          <input type="text" id="aFlat" placeholder="اختياري" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>ملاحظات</label>
+        <textarea id="aNotes" rows="2" placeholder="أي تعليمات إضافية للتوصيل…"></textarea>
+      </div>
+    </div>
+
+    <!-- Order summary inside modal -->
+    <div class="addr-summary" id="addrSummary"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-accent" id="payBtn" onclick="submitAddress()">الدفع عبر Hesabe ←</button>
+      <button class="btn btn-outline" onclick="closeAddress()">رجوع</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ TOAST ══ -->
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js"></script>
 <script>
-/* ─── Icons fallback ─── */
+/* ─── Icons ─── */
 const ICONS = {
   'قهوة':'☕','شاي':'🍵','بن':'🫘','هيل':'🌿',
   'زعفران':'🌸','عطر':'🌺','توابل':'🌶️','أخرى':'🛍'
@@ -95,38 +145,31 @@ function getIcon(name, cat) {
 let allProducts = [];
 let cart = JSON.parse(localStorage.getItem('bnwgnad_cart') || '[]');
 
-/* ─── Load products ─── */
+/* ════════════════════════════
+   PRODUCTS
+════════════════════════════ */
 async function loadProducts() {
   const { data, error } = await supabase
-    .from('products')
-    .select('*')
-    .eq('Available', true)
-    .order('Name');
-
+    .from('products').select('*').eq('Available', true).order('Name');
   const grid = document.getElementById('productsGrid');
-
   if (error) {
     grid.innerHTML = '<div class="empty-state"><p>حدث خطأ أثناء تحميل المنتجات</p></div>';
     return;
   }
-
   allProducts = data;
   buildFilters(data);
   renderProducts(data);
 }
 
-/* ─── Filters ─── */
 function buildFilters(data) {
-  const filtersEl = document.getElementById('filters');
+  const el = document.getElementById('filters');
   const cats = ['all', ...new Set(data.map(p => p.Category).filter(Boolean))];
-  filtersEl.innerHTML = cats.map(c =>
-    `<button class="filter-btn ${c==='all'?'active':''}" data-cat="${c}">
-       ${c==='all'?'الكل':c}
-     </button>`
+  el.innerHTML = cats.map(c =>
+    `<button class="filter-btn ${c==='all'?'active':''}" data-cat="${c}">${c==='all'?'الكل':c}</button>`
   ).join('');
-  filtersEl.querySelectorAll('.filter-btn').forEach(btn => {
+  el.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      filtersEl.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      el.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const cat = btn.dataset.cat;
       renderProducts(cat==='all' ? allProducts : allProducts.filter(p => p.Category===cat));
@@ -134,21 +177,17 @@ function buildFilters(data) {
   });
 }
 
-/* ─── Render products ─── */
 function renderProducts(list) {
   const grid = document.getElementById('productsGrid');
   if (!list.length) {
     grid.innerHTML = '<div class="empty-state"><p>لا توجد منتجات في هذه الفئة</p></div>';
     return;
   }
-
   grid.innerHTML = list.map(p => {
-    const price = typeof p.Price === 'number' ? p.Price.toFixed(2) : parseFloat(p.Price||0).toFixed(2);
-    const inCart = cart.find(c => c.id === p.id);
+    const price = parseFloat(p.Price||0).toFixed(2);
     const imgHtml = p.image_url
       ? `<img src="${p.image_url}" alt="${p.Name}" loading="lazy" />`
       : `<span class="product-icon-fallback">${getIcon(p.Name, p.Category)}</span>`;
-
     return `
     <div class="product-card" id="card-${p.id}">
       <div class="product-img-wrap">${imgHtml}</div>
@@ -157,17 +196,69 @@ function renderProducts(list) {
       ${p.Description ? `<p class="description">${p.Description}</p>` : ''}
       <div class="price-row">
         <p class="price">${price} <span>د.ك</span></p>
-        <button class="add-btn ${inCart?'added':''}"
-          onclick="addToCart(${p.id})"
-          id="addbtn-${p.id}">
-          ${inCart ? '✓ أُضيف' : '+ أضف'}
-        </button>
+        <div class="card-qty-ctrl" id="cardqty-${p.id}">${cardQtyHtml(p.id)}</div>
       </div>
     </div>`;
   }).join('');
 }
 
-/* ─── Cart logic ─── */
+/* Returns the correct HTML for a card's qty control */
+function cardQtyHtml(id) {
+  const item = cart.find(c => c.id === id);
+  if (!item) {
+    return `<button class="add-btn" onclick="cardAdd(${id})">＋ أضف</button>`;
+  }
+  return `
+    <div class="card-qty-inline">
+      <button class="cq-btn" onclick="cardDec(${id})">−</button>
+      <span class="cq-num">${item.qty}</span>
+      <button class="cq-btn" onclick="cardInc(${id})">＋</button>
+    </div>`;
+}
+
+/* Update only the qty-ctrl area of one card (no full re-render) */
+function refreshCardQty(id) {
+  const el = document.getElementById(`cardqty-${id}`);
+  if (el) el.innerHTML = cardQtyHtml(id);
+}
+
+function cardAdd(id) {
+  const p = allProducts.find(x => x.id === id);
+  if (!p) return;
+  cart.push({
+    id: p.id, name: p.Name,
+    price: parseFloat(p.Price||0),
+    image: p.image_url || null,
+    icon: getIcon(p.Name, p.Category),
+    qty: 1
+  });
+  saveCart();
+  refreshCardQty(id);
+  renderCartItems();
+}
+
+function cardInc(id) {
+  const item = cart.find(c => c.id === id);
+  if (!item) return;
+  item.qty++;
+  saveCart();
+  refreshCardQty(id);
+  renderCartItems();
+}
+
+function cardDec(id) {
+  const item = cart.find(c => c.id === id);
+  if (!item) return;
+  item.qty--;
+  if (item.qty <= 0) cart = cart.filter(c => c.id !== id);
+  saveCart();
+  refreshCardQty(id);
+  renderCartItems();
+}
+
+/* ════════════════════════════
+   CART
+════════════════════════════ */
 function saveCart() {
   localStorage.setItem('bnwgnad_cart', JSON.stringify(cart));
   updateCartCount();
@@ -180,64 +271,28 @@ function updateCartCount() {
   badge.style.display = total > 0 ? 'flex' : 'none';
 }
 
-function addToCart(id) {
-  const product = allProducts.find(p => p.id === id);
-  if (!product) return;
-  const existing = cart.find(c => c.id === id);
-  if (existing) {
-    existing.qty++;
-  } else {
-    cart.push({
-      id: product.id,
-      name: product.Name,
-      price: typeof product.Price === 'number' ? product.Price : parseFloat(product.Price||0),
-      image: product.image_url || null,
-      icon: getIcon(product.Name, product.Category),
-      qty: 1
-    });
-  }
-  saveCart();
-
-  const btn = document.getElementById(`addbtn-${id}`);
-  if (btn) { btn.textContent = '✓ أُضيف'; btn.classList.add('added'); }
-
-  showToast(`تمت إضافة "${product.Name}" للسلة 🛒`, 'success');
-  renderCartItems();
-}
-
+/* qty changes from inside the sidebar */
 function changeQty(id, delta) {
   const item = cart.find(c => c.id === id);
   if (!item) return;
   item.qty += delta;
   if (item.qty <= 0) cart = cart.filter(c => c.id !== id);
   saveCart();
+  refreshCardQty(id);
   renderCartItems();
-
-  // update add button state
-  const btn = document.getElementById(`addbtn-${id}`);
-  if (btn) {
-    const still = cart.find(c => c.id === id);
-    btn.textContent = still ? '✓ أُضيف' : '+ أضف';
-    still ? btn.classList.add('added') : btn.classList.remove('added');
-  }
 }
-
 function removeFromCart(id) { changeQty(id, -999); }
 
 function renderCartItems() {
   const el     = document.getElementById('cartItems');
   const footer = document.getElementById('cartFooter');
-
   if (!cart.length) {
     el.innerHTML = '<div class="cart-empty">🛒<br><br>السلة فارغة</div>';
     footer.style.display = 'none';
     return;
   }
-
   el.innerHTML = cart.map(item => {
-    const imgHtml = item.image
-      ? `<img src="${item.image}" alt="${item.name}" />`
-      : item.icon;
+    const imgHtml = item.image ? `<img src="${item.image}" alt="${item.name}" />` : item.icon;
     return `
     <div class="cart-item">
       <div class="cart-item-img">${imgHtml}</div>
@@ -246,21 +301,19 @@ function renderCartItems() {
         <p class="item-price">${(item.price * item.qty).toFixed(2)} د.ك</p>
       </div>
       <div class="qty-ctrl">
-        <button class="qty-btn" onclick="changeQty(${item.id}, -1)">−</button>
+        <button class="qty-btn" onclick="changeQty(${item.id},-1)">−</button>
         <span class="qty-num">${item.qty}</span>
-        <button class="qty-btn" onclick="changeQty(${item.id}, 1)">+</button>
+        <button class="qty-btn" onclick="changeQty(${item.id}, 1)">＋</button>
       </div>
       <button class="cart-item-remove" onclick="removeFromCart(${item.id})" title="حذف">✕</button>
     </div>`;
   }).join('');
-
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
   document.getElementById('cartTotal').textContent = `${total.toFixed(2)} د.ك`;
   footer.style.display = 'block';
 }
 
-/* ─── Cart open/close ─── */
-function openCart()  {
+function openCart() {
   renderCartItems();
   document.getElementById('cartOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -273,26 +326,66 @@ function handleCartOverlayClick(e) {
   if (e.target === document.getElementById('cartOverlay')) closeCart();
 }
 
-/* ─── Toast ─── */
-function showToast(msg, type='') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast ' + type;
-  t.classList.add('show');
-  clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove('show'), 2800);
-}
-
-/* ─── Checkout ─── */
-async function startCheckout() {
+/* ════════════════════════════
+   ADDRESS MODAL
+════════════════════════════ */
+function startCheckout() {
   if (!cart.length) return;
 
-  const btn = document.getElementById('checkoutBtn');
+  /* Build order summary */
+  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const summaryHtml = `
+    <div class="addr-summary-box">
+      <p class="addr-summary-title">ملخص الطلب</p>
+      ${cart.map(i =>
+        `<div class="addr-summary-row">
+          <span>${i.name} × ${i.qty}</span>
+          <span>${(i.price * i.qty).toFixed(2)} د.ك</span>
+        </div>`
+      ).join('')}
+      <div class="addr-summary-total">
+        <span>المجموع</span>
+        <span>${total.toFixed(2)} د.ك</span>
+      </div>
+    </div>`;
+  document.getElementById('addrSummary').innerHTML = summaryHtml;
+
+  /* Reset pay button */
+  const btn = document.getElementById('payBtn');
+  btn.textContent = 'الدفع عبر Hesabe ←';
+  btn.disabled = false;
+
+  closeCart();
+  document.getElementById('addressOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAddress() {
+  document.getElementById('addressOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+async function submitAddress() {
+  const name     = document.getElementById('aName').value.trim();
+  const phone    = document.getElementById('aPhone').value.trim();
+  const area     = document.getElementById('aArea').value.trim();
+  const street   = document.getElementById('aStreet').value.trim();
+  const building = document.getElementById('aBuilding').value.trim();
+  const flat     = document.getElementById('aFlat').value.trim();
+  const notes    = document.getElementById('aNotes').value.trim();
+
+  if (!name || !phone || !area || !street || !building) {
+    showToast('⚠️ يرجى ملء جميع الحقول المطلوبة', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('payBtn');
   btn.textContent = '⏳ جاري التوجيه…';
   btn.disabled = true;
 
-  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const total    = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const orderRef = 'ORD-' + Date.now();
+  const address  = `${area}، ${street}، ${building}${flat ? ' ش'+flat : ''}`;
 
   try {
     const res = await fetch('/api/create-payment', {
@@ -302,6 +395,7 @@ async function startCheckout() {
         amount:   total.toFixed(3),
         orderRef: orderRef,
         items:    cart.map(i => `${i.name} x${i.qty}`),
+        customer: { name, phone, address, notes },
       }),
     });
 
@@ -311,14 +405,23 @@ async function startCheckout() {
       window.location.href = data.paymentUrl;
     } else {
       showToast('❌ ' + (data.error || 'حدث خطأ في بوابة الدفع'), 'error');
-      btn.textContent = 'إتمام الطلب ✓';
+      btn.textContent = 'الدفع عبر Hesabe ←';
       btn.disabled = false;
     }
-  } catch (err) {
+  } catch {
     showToast('❌ تعذّر الاتصال ببوابة الدفع', 'error');
-    btn.textContent = 'إتمام الطلب ✓';
+    btn.textContent = 'الدفع عبر Hesabe ←';
     btn.disabled = false;
   }
+}
+
+/* ─── Toast ─── */
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type + ' show';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2800);
 }
 
 /* ─── Init ─── */

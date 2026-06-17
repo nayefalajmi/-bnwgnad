@@ -820,6 +820,97 @@ tbody td { padding: .6rem 1rem; font-size: .86rem; vertical-align: middle; }
 /* ══════════════════════════════
    RESPONSIVE
 ══════════════════════════════ */
+/* ══════════════════════════════
+   CARD INLINE QTY CONTROL
+══════════════════════════════ */
+.card-qty-ctrl { display: flex; align-items: center; }
+
+.card-qty-inline {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 2rem;
+  padding: .2rem .4rem;
+}
+
+.cq-btn {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, transform .1s;
+  flex-shrink: 0;
+}
+.cq-btn:hover  { background: var(--primary-light); }
+.cq-btn:active { transform: scale(.9); }
+
+.cq-num {
+  min-width: 22px;
+  text-align: center;
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+/* ══════════════════════════════
+   ADDRESS MODAL
+══════════════════════════════ */
+.addr-form { display: flex; flex-direction: column; gap: 0; }
+
+.addr-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .75rem;
+}
+
+.addr-summary {
+  margin-top: 1rem;
+}
+
+.addr-summary-box {
+  background: var(--bg);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: .85rem 1rem;
+}
+
+.addr-summary-title {
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-muted);
+  margin-bottom: .6rem;
+  font-weight: 600;
+}
+
+.addr-summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: .85rem;
+  color: var(--text-muted);
+  padding: .2rem 0;
+}
+
+.addr-summary-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--primary);
+  border-top: 1px solid var(--border);
+  margin-top: .5rem;
+  padding-top: .5rem;
+}
+
 @media (max-width: 768px) {
   .admin-layout    { flex-direction: column; }
   .admin-sidebar   { width: 100%; display: flex; overflow-x: auto; padding: .5rem 0; }
@@ -828,6 +919,7 @@ tbody td { padding: .6rem 1rem; font-size: .86rem; vertical-align: middle; }
   .admin-main      { padding: 1.25rem; }
   .hero h1         { font-size: 1.8rem; }
   .form-row        { grid-template-columns: 1fr; }
+  .addr-row        { grid-template-columns: 1fr; }
   .cart-sidebar    { width: 100%; }
   .navbar          { padding: 0 1rem; }
   .navbar-brand .brand-name { font-size: 1.1rem; }
