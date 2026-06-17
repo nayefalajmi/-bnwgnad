@@ -75,6 +75,7 @@
   </div>
 </div>
 
+<script src="js/analytics.js"></script>
 <script>
   const p = new URLSearchParams(location.search);
   const details = document.getElementById('details');
@@ -89,6 +90,15 @@
 
   // Clear cart after successful payment
   localStorage.removeItem('bnwgnad_cart');
+
+  // Track purchase event
+  if (p.get('ref')) {
+    const amount = parseFloat(p.get('amount') || 0);
+    const method = p.get('method') || 'card';
+    if (typeof trackPurchase === 'function') {
+      trackPurchase(p.get('ref'), amount, [], method);
+    }
+  }
 </script>
 </body>
 </html>

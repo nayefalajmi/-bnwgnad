@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم | بن وقناد</title>
   <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     /* ── Orders ── */
     .order-card {
@@ -142,6 +144,29 @@
     .sound-off { opacity: .55; }
     .orders-empty { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 1.05rem; }
     .header-actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+
+    /* ── Enhanced Stats ── */
+    .stats-section-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 1.5rem 0 .75rem;
+      padding-bottom: .4rem;
+      border-bottom: 2px solid var(--border);
+    }
+    .stats-section-title:first-child { margin-top: 0; }
+    .chart-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .chart-card h3 { margin: 0 0 1.1rem; font-size: .95rem; color: var(--primary); }
+    .top5-bar-wrap  { margin-bottom: .85rem; }
+    .top5-bar-label { display: flex; justify-content: space-between; font-size: .85rem; margin-bottom: .3rem; }
+    .top5-bar-track { background: var(--bg); border-radius: 1rem; height: 9px; overflow: hidden; }
+    .top5-bar-fill  { height: 100%; background: var(--accent); border-radius: 1rem; transition: width .7s ease; }
   </style>
 </head>
 <body>
@@ -181,12 +206,42 @@
 
     <!-- ── Stats ── -->
     <div id="sec-stats" style="display:none">
-      <div class="admin-header"><h2>📊 الإحصائيات</h2></div>
+      <div class="admin-header">
+        <h2>📊 الإحصائيات</h2>
+        <button class="btn btn-accent btn-sm" id="exportBtn" onclick="exportExcel()">📥 تصدير Excel</button>
+      </div>
+
+      <!-- Products -->
+      <p class="stats-section-title">📦 المنتجات</p>
       <div class="stats-row">
         <div class="stat-card"><div class="stat-num" id="stTotal">—</div><div class="stat-label">إجمالي المنتجات</div></div>
         <div class="stat-card"><div class="stat-num" id="stOn">—</div><div class="stat-label">ظاهرة (ON)</div></div>
         <div class="stat-card"><div class="stat-num" id="stOff">—</div><div class="stat-label">مخفية (OFF)</div></div>
         <div class="stat-card"><div class="stat-num" id="stCats">—</div><div class="stat-label">الفئات</div></div>
+      </div>
+
+      <!-- Sales -->
+      <p class="stats-section-title">💰 المبيعات (الطلبات المكتملة)</p>
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-num" id="stSalesToday">—</div><div class="stat-label">مبيعات اليوم (د.ك)</div></div>
+        <div class="stat-card"><div class="stat-num" id="stSalesMonth">—</div><div class="stat-label">مبيعات الشهر (د.ك)</div></div>
+        <div class="stat-card"><div class="stat-num" id="stOrdersCompleted" style="color:#27ae60">—</div><div class="stat-label">طلبات مكتملة</div></div>
+        <div class="stat-card"><div class="stat-num" id="stOrdersDelivering" style="color:#e67e22">—</div><div class="stat-label">قيد التوصيل</div></div>
+        <div class="stat-card"><div class="stat-num" id="stOrdersCancelled" style="color:#e74c3c">—</div><div class="stat-label">طلبات ملغية</div></div>
+      </div>
+
+      <!-- 7-day chart -->
+      <div class="chart-card">
+        <h3>📈 المبيعات — آخر ٧ أيام (د.ك)</h3>
+        <canvas id="salesChart" height="110"></canvas>
+      </div>
+
+      <!-- Top 5 products -->
+      <div class="chart-card">
+        <h3>🏆 أكثر ٥ منتجات مبيعاً</h3>
+        <div id="top5Products">
+          <p style="color:var(--text-muted);text-align:center;padding:1rem">جاري التحميل…</p>
+        </div>
       </div>
     </div>
 
@@ -374,6 +429,163 @@ function updateStats() {
   document.getElementById('stCats').textContent  = cats;
 }
 
+/* ── Full stats from orders ── */
+let salesChartInst = null;
+
+async function loadFullStats() {
+  updateStats();
+
+  const { data, error } = await supabase
+    .from('orders').select('*').order('created_at', { ascending: false });
+  if (error || !data) return;
+
+  const now        = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const completed  = data.filter(o => o.status === 'completed');
+
+  const todaySales = completed
+    .filter(o => new Date(o.created_at) >= todayStart)
+    .reduce((s, o) => s + parseFloat(o.total || 0), 0);
+  const monthSales = completed
+    .filter(o => new Date(o.created_at) >= monthStart)
+    .reduce((s, o) => s + parseFloat(o.total || 0), 0);
+
+  document.getElementById('stSalesToday').textContent      = todaySales.toFixed(3);
+  document.getElementById('stSalesMonth').textContent      = monthSales.toFixed(3);
+  document.getElementById('stOrdersCompleted').textContent = completed.length;
+  document.getElementById('stOrdersDelivering').textContent = data.filter(o => o.status === 'delivering').length;
+  document.getElementById('stOrdersCancelled').textContent  = data.filter(o => o.status === 'cancelled').length;
+
+  /* Top 5 products */
+  const prodMap = {};
+  completed.forEach(order => {
+    (Array.isArray(order.items) ? order.items : []).forEach(item => {
+      if (!item.name) return;
+      if (!prodMap[item.name]) prodMap[item.name] = { qty: 0, rev: 0 };
+      prodMap[item.name].qty += (item.qty  || 1);
+      prodMap[item.name].rev += (item.price || 0) * (item.qty || 1);
+    });
+  });
+  const top5 = Object.entries(prodMap).sort((a, b) => b[1].qty - a[1].qty).slice(0, 5);
+  const maxQ = top5[0]?.[1].qty || 1;
+  const container = document.getElementById('top5Products');
+  if (!top5.length) {
+    container.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:1.5rem">لا توجد طلبات مكتملة بعد</p>';
+  } else {
+    container.innerHTML = top5.map(([name, d], i) => `
+      <div class="top5-bar-wrap">
+        <div class="top5-bar-label">
+          <span><strong>${i + 1}.</strong> ${esc(name)}</span>
+          <span style="color:var(--accent);font-weight:700">${d.qty} وحدة &nbsp;·&nbsp; ${d.rev.toFixed(3)} د.ك</span>
+        </div>
+        <div class="top5-bar-track">
+          <div class="top5-bar-fill" style="width:${(d.qty/maxQ*100).toFixed(1)}%"></div>
+        </div>
+      </div>`).join('');
+  }
+
+  /* Last 7 days chart */
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d    = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const next = new Date(d); next.setDate(next.getDate() + 1);
+    const tot  = completed
+      .filter(o => { const t = new Date(o.created_at); return t >= d && t < next; })
+      .reduce((s, o) => s + parseFloat(o.total || 0), 0);
+    days.push({
+      label: d.toLocaleDateString('ar-KW', { weekday: 'short', day: 'numeric', month: 'numeric' }),
+      total: parseFloat(tot.toFixed(3)),
+    });
+  }
+
+  const ctx = document.getElementById('salesChart').getContext('2d');
+  if (salesChartInst) salesChartInst.destroy();
+  salesChartInst = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels:   days.map(d => d.label),
+      datasets: [{
+        label:           'المبيعات (د.ك)',
+        data:            days.map(d => d.total),
+        backgroundColor: 'rgba(196,124,26,0.75)',
+        borderColor:     '#c47c1a',
+        borderWidth:     2,
+        borderRadius:    6,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => `${c.parsed.y.toFixed(3)} د.ك` } },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => v.toFixed(1) } },
+        x: { ticks: { font: { family: 'Tajawal, Arial' }, maxRotation: 30 } },
+      },
+    },
+  });
+
+  window._exportOrders = data;
+}
+
+/* ── Excel export ── */
+async function exportExcel() {
+  const btn = document.getElementById('exportBtn');
+  btn.textContent = '⏳ جاري التصدير…';
+  btn.disabled = true;
+
+  try {
+    const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    const statusLabel = { new:'جديد', preparing:'قيد التحضير', delivering:'خرج للتوصيل', completed:'مكتمل', cancelled:'ملغي', pending_payment:'بانتظار الدفع' };
+
+    /* Sheet 1 — all orders */
+    const ordersRows = (data || []).map(o => ({
+      'رقم الطلب':      o.order_ref || o.id,
+      'التاريخ':        new Date(o.created_at).toLocaleString('ar-KW'),
+      'الزبون':         o.customer_name  || '',
+      'الهاتف':         o.customer_phone || '',
+      'العنوان':        o.address        || '',
+      'الملاحظات':      o.notes          || '',
+      'المنتجات':       (Array.isArray(o.items) ? o.items : []).map(i => `${i.name} × ${i.qty}`).join('، '),
+      'المجموع (د.ك)':  parseFloat(o.total || 0).toFixed(3),
+      'طريقة الدفع':    o.payment_method === 'cash' ? 'كاش' : 'بطاقة',
+      'الحالة':         statusLabel[o.status] || o.status,
+    }));
+
+    /* Sheet 2 — top products */
+    const prodMap = {};
+    (data || []).filter(o => o.status === 'completed').forEach(order => {
+      (Array.isArray(order.items) ? order.items : []).forEach(item => {
+        if (!item.name) return;
+        if (!prodMap[item.name]) prodMap[item.name] = { qty: 0, rev: 0 };
+        prodMap[item.name].qty += (item.qty  || 1);
+        prodMap[item.name].rev += (item.price || 0) * (item.qty || 1);
+      });
+    });
+    const prodRows = Object.entries(prodMap)
+      .sort((a, b) => b[1].qty - a[1].qty)
+      .map(([name, d]) => ({
+        'المنتج':            name,
+        'الكمية المباعة':    d.qty,
+        'الإيراد (د.ك)':    d.rev.toFixed(3),
+      }));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ordersRows), 'الطلبات');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(prodRows),   'أفضل المنتجات');
+    const date = new Date().toLocaleDateString('ar-KW').replace(/\//g, '-');
+    XLSX.writeFile(wb, `تقرير-بن-وقناد-${date}.xlsx`);
+    showToast('✅ تم تصدير التقرير بنجاح', 'success');
+  } catch(e) {
+    showToast('❌ فشل التصدير: ' + e.message, 'error');
+  } finally {
+    btn.textContent = '📥 تصدير Excel';
+    btn.disabled = false;
+  }
+}
+
 function switchSection(e, name) {
   e.preventDefault();
   document.getElementById('sec-products').style.display = name === 'products' ? 'block' : 'none';
@@ -382,6 +594,7 @@ function switchSection(e, name) {
   document.querySelectorAll('.admin-sidebar a[data-section]').forEach(a =>
     a.classList.toggle('active', a.dataset.section === name));
   if (name === 'orders') loadOrders();
+  if (name === 'stats')  loadFullStats();
 }
 
 function populateCatOptions() {

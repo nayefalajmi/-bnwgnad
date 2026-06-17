@@ -142,6 +142,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js"></script>
+<script src="js/analytics.js"></script>
 <script>
 /* ─── Icons ─── */
 const ICONS = {
@@ -238,16 +239,12 @@ function refreshCardQty(id) {
 function cardAdd(id) {
   const p = allProducts.find(x => x.id === id);
   if (!p) return;
-  cart.push({
-    id: p.id, name: p.Name,
-    price: parseFloat(p.Price||0),
-    image: p.image_url || null,
-    icon: getIcon(p.Name, p.Category),
-    qty: 1
-  });
+  const price = parseFloat(p.Price||0);
+  cart.push({ id: p.id, name: p.Name, price, image: p.image_url || null, icon: getIcon(p.Name, p.Category), qty: 1 });
   saveCart();
   refreshCardQty(id);
   renderCartItems();
+  trackAddToCart({ id: p.id, name: p.Name, price });
 }
 
 function cardInc(id) {
@@ -383,6 +380,7 @@ function startCheckout() {
   closeCart();
   document.getElementById('addressOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+  trackBeginCheckout(total, cart);
 }
 
 function closeAddress() {
