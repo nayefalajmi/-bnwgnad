@@ -68,7 +68,7 @@
     <div class="cart-footer" id="cartFooter" style="display:none">
       <div class="cart-total">
         <span>المجموع:</span>
-        <span id="cartTotal">0.00 ريال</span>
+        <span id="cartTotal">0.00 د.ك</span>
       </div>
       <button class="checkout-btn">إتمام الطلب ✓</button>
     </div>
@@ -157,7 +157,7 @@ function renderProducts(list) {
       <p class="category">${p.Category||''}</p>
       ${p.Description ? `<p class="description">${p.Description}</p>` : ''}
       <div class="price-row">
-        <p class="price">${price} <span>ريال</span></p>
+        <p class="price">${price} <span>د.ك</span></p>
         <button class="add-btn ${inCart?'added':''}"
           onclick="addToCart(${p.id})"
           id="addbtn-${p.id}">
@@ -244,7 +244,7 @@ function renderCartItems() {
       <div class="cart-item-img">${imgHtml}</div>
       <div class="cart-item-info">
         <h4>${item.name}</h4>
-        <p class="item-price">${(item.price * item.qty).toFixed(2)} ريال</p>
+        <p class="item-price">${(item.price * item.qty).toFixed(2)} د.ك</p>
       </div>
       <div class="qty-ctrl">
         <button class="qty-btn" onclick="changeQty(${item.id}, -1)">−</button>
@@ -256,7 +256,7 @@ function renderCartItems() {
   }).join('');
 
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  document.getElementById('cartTotal').textContent = `${total.toFixed(2)} ريال`;
+  document.getElementById('cartTotal').textContent = `${total.toFixed(2)} د.ك`;
   footer.style.display = 'block';
 }
 
