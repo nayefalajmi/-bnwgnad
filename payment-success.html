@@ -79,10 +79,12 @@
 <script>
   const p = new URLSearchParams(location.search);
   const details = document.getElementById('details');
+  const isCash = p.get('method') === 'cash';
   const rows = [
-    ['رقم الطلب',    p.get('ref')    || '—'],
-    ['المبلغ',       p.get('amount') ? p.get('amount') + ' د.ك' : '—'],
-    ['رقم العملية',  p.get('txn')    || '—'],
+    ['رقم الطلب',   p.get('ref')    || '—'],
+    ['المبلغ',      p.get('amount') ? p.get('amount') + ' د.ك' : '—'],
+    ...(isCash ? [] : [['رقم العملية', p.get('txn') || '—']]),
+    ['طريقة الدفع', isCash ? '💵 كاش عند الاستلام' : '💳 بطاقة'],
   ];
   details.innerHTML = rows.map(([k,v]) =>
     `<div class="detail-row"><span>${k}</span><span>${v}</span></div>`

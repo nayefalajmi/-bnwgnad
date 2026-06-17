@@ -5,7 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم | بن وقناد</title>
   <link rel="stylesheet" href="css/style.css" />
-  <script src="js/analytics.js"></script>
+  <script>
+  /* ── Admin password gate ── */
+  (function() {
+    const PASS = 'bnwgnad2020';
+    if (sessionStorage.getItem('adm') !== '1') {
+      const entered = prompt('🔐 أدخل كلمة مرور لوحة التحكم');
+      if (entered !== PASS) {
+        document.documentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial;font-size:1.4rem;color:#c0392b">❌ غير مصرح بالدخول</div>';
+        throw new Error('Unauthorized');
+      }
+      sessionStorage.setItem('adm', '1');
+    }
+  })();
+</script>
+<script src="js/analytics.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
