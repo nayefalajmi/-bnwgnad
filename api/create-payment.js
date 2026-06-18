@@ -1,45 +1,71 @@
 import crypto from 'crypto';
 import https  from 'https';
 
+/* ── Hesabe credentials ── */
 const MERCHANT_CODE = '47340922';
 const ACCESS_CODE   = '15dc3bd9-33b3-406c-b13b-edb3d056bc30';
-const SECRET_KEY    = process.env.HESABE_SECRET_KEY;
-const IV_KEY        = process.env.HESABE_IV_KEY;
-const SB_HOST       = 'ymopznkoddniibrxbeav.supabase.co';
-const SB_KEY        = 'sb_publishable_6tFnUzqgHYp2Zu3Px4YAtw_QJLLWiOk';
+const SECRET_KEY    = process.env.HESABE_SECRET_KEY;   // 32 chars
+const IV_KEY        = process.env.HESABE_IV_KEY;       // 16 chars
 
-/* ── AES-256-CBC encryption ── */
-function encrypt(data) {
+/* ── Hesabe endpoints (In-Direct / paymentType 0) ── */
+const HESABE_HOST   = 'api.hesabe.com';
+const CHECKOUT_PATH = '/checkout';
+const PAYMENT_URL   = 'https://api.hesabe.com/payment';
+
+/* ── Supabase ── */
+const SB_HOST = 'ymopznkoddniibrxbeav.supabase.co';
+const SB_KEY  = 'sb_publishable_6tFnUzqgHYp2Zu3Px4YAtw_QJLLWiOk';
+
+/* ════════════════════════════════════════════════════
+   HesabeCrypt — exact port of the official library
+   AES-256-CBC + custom PKCS5 padding (block size 32) + hex
+   ════════════════════════════════════════════════════ */
+function pkcs5Pad(buf) {
+  const blockSize = 32;
+  const pad = blockSize - (buf.length % blockSize);
+  return Buffer.concat([buf, Buffer.alloc(pad, pad)]);
+}
+
+function encrypt(plain) {
+  const data   = pkcs5Pad(Buffer.from(plain, 'utf8'));
   const cipher = crypto.createCipheriv(
     'aes-256-cbc',
     Buffer.from(SECRET_KEY, 'utf8'),
     Buffer.from(IV_KEY,     'utf8')
   );
-  return cipher.update(data, 'utf8', 'base64') + cipher.final('base64');
+  cipher.setAutoPadding(false);                 // we padded manually
+  return Buffer.concat([cipher.update(data), cipher.final()]).toString('hex');
 }
 
-/* ── Generic HTTPS POST (no fetch dependency) ── */
-function httpsPost(hostname, path, body, extraHeaders = {}) {
+function decrypt(hex) {
+  hex = String(hex).trim();
+  if (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0) return false;
+  const decipher = crypto.createDecipheriv(
+    'aes-256-cbc',
+    Buffer.from(SECRET_KEY, 'utf8'),
+    Buffer.from(IV_KEY,     'utf8')
+  );
+  decipher.setAutoPadding(false);
+  const dec = Buffer.concat([decipher.update(Buffer.from(hex, 'hex')), decipher.final()]);
+  const pad = dec[dec.length - 1];              // pkcs5 unpad
+  if (pad > dec.length) return false;
+  return dec.slice(0, dec.length - pad).toString('utf8');
+}
+
+/* ── Generic HTTPS POST (raw string body, no fetch dependency) ── */
+function httpsPost(hostname, path, bodyStr, headers = {}) {
   return new Promise((resolve, reject) => {
-    const bodyStr = JSON.stringify(body);
     const req = https.request(
       {
         hostname,
         path,
         method: 'POST',
-        headers: {
-          'Content-Type':   'application/json',
-          'Content-Length': Buffer.byteLength(bodyStr),
-          ...extraHeaders,
-        },
+        headers: { 'Content-Length': Buffer.byteLength(bodyStr), ...headers },
       },
       (res) => {
         let raw = '';
         res.on('data', c => { raw += c; });
-        res.on('end', () => {
-          try { resolve({ status: res.statusCode, body: JSON.parse(raw) }); }
-          catch (_) { resolve({ status: res.statusCode, body: raw }); }
-        });
+        res.on('end', () => resolve({ status: res.statusCode, body: raw }));
       }
     );
     req.on('error', reject);
@@ -52,7 +78,8 @@ function httpsPost(hostname, path, body, extraHeaders = {}) {
 /* ── Save order to Supabase (fire-and-forget) ── */
 async function saveOrder(orderData) {
   try {
-    await httpsPost(SB_HOST, '/rest/v1/orders', orderData, {
+    await httpsPost(SB_HOST, '/rest/v1/orders', JSON.stringify(orderData), {
+      'Content-Type':  'application/json',
       'apikey':        SB_KEY,
       'Authorization': `Bearer ${SB_KEY}`,
       'Prefer':        'return=minimal',
@@ -62,7 +89,9 @@ async function saveOrder(orderData) {
   }
 }
 
-/* ── Handler ── */
+/* ════════════════════════════════════════════════════
+   Handler
+   ════════════════════════════════════════════════════ */
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -80,7 +109,7 @@ export default async function handler(req, res) {
   const ref     = orderRef || `ORD-${Date.now()}`;
   const baseUrl = `https://${req.headers.host}`;
 
-  /* Save order (don't block on failure) */
+  /* Save the order (don't block checkout on a save failure) */
   await saveOrder({
     order_ref:      ref,
     customer_name:  customer?.name    || 'غير محدد',
@@ -93,11 +122,12 @@ export default async function handler(req, res) {
     status:         'pending_payment',
   });
 
-  /* Build Hesabe payload */
+  /* Build the Hesabe In-Direct payload */
   const paymentData = {
     merchantCode:         MERCHANT_CODE,
     amount:               parseFloat(amount).toFixed(3),
     paymentType:          0,
+    currency:             'KWD',
     responseUrl:          `${baseUrl}/api/payment-callback`,
     failureUrl:           `${baseUrl}/payment-failed.html`,
     version:              '2.0',
@@ -112,19 +142,35 @@ export default async function handler(req, res) {
   try {
     const encrypted = encrypt(JSON.stringify(paymentData));
 
+    /* POST encrypted payload to Hesabe /checkout (form-urlencoded) */
     const result = await httpsPost(
-      'checkout.hesabe.com',
-      '/payment',
-      { data: encrypted },
-      { 'accessCode': ACCESS_CODE }
+      HESABE_HOST,
+      CHECKOUT_PATH,
+      `data=${encrypted}`,                       // hex is URL-safe
+      {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'accessCode':   ACCESS_CODE,
+        'Accept':       'application/json',
+      }
     );
 
-    if (result.body?.status === 1 && result.body?.response) {
-      return res.status(200).json({ paymentUrl: result.body.response });
+    /* The response body is an encrypted hex string — decrypt it */
+    const plain = decrypt(result.body);
+    if (!plain) {
+      console.error('Hesabe non-encrypted response:', result.status, result.body);
+      return res.status(502).json({ error: 'Payment gateway error', details: result.body });
     }
 
-    console.error('Hesabe rejected:', JSON.stringify(result.body));
-    return res.status(502).json({ error: 'Payment gateway error', details: result.body });
+    const data  = JSON.parse(plain);
+    const token = data?.response?.data;
+
+    if (data?.status === false || !token) {
+      console.error('Hesabe checkout rejected:', plain);
+      return res.status(502).json({ error: 'Payment gateway rejected the request', details: data });
+    }
+
+    /* Redirect customer to the hosted payment page */
+    return res.status(200).json({ paymentUrl: `${PAYMENT_URL}?data=${token}` });
 
   } catch (err) {
     console.error('Hesabe request failed:', err.message);
