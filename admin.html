@@ -5,20 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم | بن وقناد</title>
   <link rel="stylesheet" href="css/style.css" />
-  <script>
-  /* ── Admin password gate ── */
-  (function() {
-    const PASS = 'bnwgnad2020';
-    if (sessionStorage.getItem('adm') !== '1') {
-      const entered = prompt('🔐 أدخل كلمة مرور لوحة التحكم');
-      if (entered !== PASS) {
-        document.documentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial;font-size:1.4rem;color:#c0392b">❌ غير مصرح بالدخول</div>';
-        throw new Error('Unauthorized');
-      }
-      sessionStorage.setItem('adm', '1');
-    }
-  })();
-</script>
 <script src="js/analytics.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -182,9 +168,65 @@
     .top5-bar-label { display: flex; justify-content: space-between; font-size: .85rem; margin-bottom: .3rem; }
     .top5-bar-track { background: var(--bg); border-radius: 1rem; height: 9px; overflow: hidden; }
     .top5-bar-fill  { height: 100%; background: var(--accent); border-radius: 1rem; transition: width .7s ease; }
+
+    /* ── Login gate ── */
+    body.locked > .navbar,
+    body.locked > .admin-layout,
+    body.locked > .modal-overlay,
+    body.locked > .toast { display: none !important; }
+
+    #loginGate { display: none; }
+    body.locked #loginGate {
+      display: flex;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: linear-gradient(135deg, #3b1f08, #5a3410);
+    }
+    .login-card {
+      background: #fff;
+      border-radius: 18px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 360px;
+      text-align: center;
+      box-shadow: 0 12px 50px rgba(0,0,0,.3);
+    }
+    .login-logo { font-size: 2.8rem; margin-bottom: .5rem; }
+    .login-card h2 { color: var(--primary); font-size: 1.3rem; margin-bottom: .3rem; }
+    .login-sub { color: var(--text-muted); font-size: .9rem; margin-bottom: 1.5rem; }
+    .login-card input {
+      width: 100%;
+      padding: .8rem 1rem;
+      margin-bottom: .8rem;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: .95rem;
+      box-sizing: border-box;
+    }
+    .login-card input:focus { outline: none; border-color: var(--accent); }
+    .login-card button { width: 100%; padding: .8rem; font-size: 1rem; margin-top: .3rem; }
+    .login-err { color: #c0392b; font-size: .85rem; min-height: 1.2rem; margin-bottom: .4rem; }
   </style>
 </head>
-<body>
+<body class="locked">
+
+<!-- ══ LOGIN GATE ══ -->
+<div id="loginGate">
+  <form class="login-card" onsubmit="return doLogin(event)">
+    <div class="login-logo">🔐</div>
+    <h2>لوحة تحكم بن وقناد</h2>
+    <p class="login-sub">سجّل الدخول للمتابعة</p>
+    <input type="text"     id="loginUser" placeholder="اسم المستخدم"   autocomplete="username" />
+    <input type="password" id="loginPass" placeholder="كلمة المرور"    autocomplete="current-password" />
+    <div class="login-err" id="loginErr"></div>
+    <button type="submit" class="btn btn-accent">دخول</button>
+  </form>
+</div>
 
 <!-- ══ NAVBAR ══ -->
 <header class="navbar">
@@ -214,6 +256,7 @@
     </a>
     <a href="#" data-section="stats" onclick="switchSection(event,'stats')">📊 الإحصائيات</a>
     <a href="index.html">🏪 المتجر</a>
+    <a href="#" onclick="logout(event)" style="color:#c0392b">🚪 تسجيل الخروج</a>
   </aside>
 
   <!-- ══ MAIN ══ -->
@@ -423,8 +466,6 @@ let products   = [];
 let editingId  = null;
 let deletingId = null;
 let uploadedFile = null;
-
-loadProducts();
 
 async function loadProducts() {
   const { data, error } = await supabase.from('products').select('*').order('id');
@@ -1059,7 +1100,53 @@ function showToast(msg, type = '') {
   t._t = setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-startPolling();
+/* ════════════════════════════════════════
+   LOGIN GATE
+════════════════════════════════════════ */
+const ADMIN_USER = 'admin';
+const ADMIN_PASS = 'bnwgnad2020';
+let adminStarted = false;
+
+function initAdmin() {
+  if (adminStarted) return;        // ابدأ التطبيق مرة واحدة فقط
+  adminStarted = true;
+  loadProducts();
+  startPolling();
+}
+
+function unlock() {
+  document.body.classList.remove('locked');
+  initAdmin();
+}
+
+function doLogin(e) {
+  e.preventDefault();
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  if (u === ADMIN_USER && p === ADMIN_PASS) {
+    sessionStorage.setItem('adm', '1');
+    document.getElementById('loginErr').textContent = '';
+    unlock();
+  } else {
+    document.getElementById('loginErr').textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة';
+    document.getElementById('loginPass').value = '';
+    document.getElementById('loginPass').focus();
+  }
+  return false;
+}
+
+function logout(e) {
+  if (e) e.preventDefault();
+  sessionStorage.removeItem('adm');
+  location.reload();
+}
+
+/* عند فتح الصفحة: افتح مباشرة لو الجلسة مفعّلة، وإلا اعرض صفحة الدخول */
+if (sessionStorage.getItem('adm') === '1') {
+  unlock();
+} else {
+  document.getElementById('loginUser').focus();
+}
 </script>
 </body>
 </html>
