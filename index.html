@@ -147,25 +147,9 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
 <script src="js/config.js"></script>
 <script src="js/analytics.js"></script>
 <script>
-/* ─── Hesabe (client-side) ─── */
-const HB_MERCHANT = '47340922';
-const HB_ACCESS   = '15dc3bd9-33b3-406c-b13b-edb3d056bc30';
-const HB_SECRET   = 'XZx9dzjrPM748jYRd9MopOkbVYyBALGR';
-const HB_IV       = 'PM748jYRd9MopOkb';
-const HB_URL      = 'https://checkout.hesabe.com/payment';
-
-function hesabeEncrypt(text) {
-  const key = CryptoJS.enc.Utf8.parse(HB_SECRET);
-  const iv  = CryptoJS.enc.Utf8.parse(HB_IV);
-  return CryptoJS.AES.encrypt(text, key, {
-    iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7
-  }).toString();
-}
-
 /* ─── Icons ─── */
 const ICONS = {
   'قهوة':'☕','شاي':'🍵','بن':'🫘','هيل':'🌿',
@@ -453,54 +437,38 @@ async function submitAddress() {
     return;
   }
 
-  /* ── بطاقة: form submit مباشر لـ Hesabe (بدون fetch / بدون CORS) ── */
+  /* ── بطاقة: عبر الـ backend الآمن (الدفع غير المباشر من Hesabe) ── */
   btn.textContent = '⏳ جاري التوجيه…';
 
-  /* حفظ الطلب في Supabase */
   try {
-    await supabase.from('orders').insert([{
-      order_ref:      orderRef,
-      customer_name:  name,
-      customer_phone: phone,
-      address:        address,
-      notes:          notes || null,
-      items:          cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
-      total:          parseFloat(total.toFixed(3)),
-      payment_method: 'card',
-      status:         'pending_payment',
-    }]);
-  } catch(e) { console.warn('Order save:', e); }
+    const resp = await fetch('/api/create-payment', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount:   total.toFixed(3),
+        orderRef,
+        items:    cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
+        customer: { name, phone, address, notes: notes || '' },
+      }),
+    });
+    const data = await resp.json();
 
-  /* تشفير بيانات الدفع */
-  const paymentData = {
-    merchantCode:         HB_MERCHANT,
-    amount:               total.toFixed(3),
-    paymentType:          0,
-    responseUrl:          `${location.origin}/api/payment-callback`,
-    failureUrl:           `${location.origin}/payment-failed.html`,
-    version:              '2.0',
-    orderReferenceNumber: orderRef,
-    variable1:            name,
-    variable2:            phone,
-    variable3:            address,
-    variable4:            '',
-    variable5:            '',
-  };
-  const encrypted = hesabeEncrypt(JSON.stringify(paymentData));
+    if (resp.ok && data.paymentUrl) {
+      /* الطلب انحفظ في الـ backend — نوجّه العميل لصفحة الدفع */
+      localStorage.removeItem('bnwgnad_cart');
+      window.location.href = data.paymentUrl;
+      return;
+    }
 
-  /* إنشاء form مخفي وإرسالها — بدون fetch وبدون CORS */
-  localStorage.removeItem('bnwgnad_cart');
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = HB_URL;
-  form.style.display = 'none';
-  [['data', encrypted], ['accessCode', HB_ACCESS]].forEach(([n, v]) => {
-    const inp = document.createElement('input');
-    inp.type = 'hidden'; inp.name = n; inp.value = v;
-    form.appendChild(inp);
-  });
-  document.body.appendChild(form);
-  form.submit();
+    console.error('Payment init failed:', data);
+    showToast('⚠️ تعذّر بدء الدفع، حاول مرة أخرى', 'error');
+  } catch (e) {
+    console.error('Payment request error:', e);
+    showToast('⚠️ خطأ في الاتصال، حاول مرة أخرى', 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'الدفع بالبطاقة ←';
 }
 
 /* ─── Toast ─── */

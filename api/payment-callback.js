@@ -6,15 +6,20 @@ const IV_KEY     = process.env.HESABE_IV_KEY;
 const SB_HOST    = 'ymopznkoddniibrxbeav.supabase.co';
 const SB_KEY     = 'sb_publishable_6tFnUzqgHYp2Zu3Px4YAtw_QJLLWiOk';
 
-/* ── AES-256-CBC decrypt ── */
-function decrypt(data) {
+/* ── HesabeCrypt decrypt — AES-256-CBC + PKCS5 block 32 + hex ── */
+function decrypt(hex) {
+  hex = String(hex).trim();
+  if (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0) return false;
   const decipher = crypto.createDecipheriv(
     'aes-256-cbc',
     Buffer.from(SECRET_KEY, 'utf8'),
     Buffer.from(IV_KEY,     'utf8')
   );
-  const plain = decipher.update(data, 'base64', 'utf8') + decipher.final('utf8');
-  return JSON.parse(plain);
+  decipher.setAutoPadding(false);
+  const dec = Buffer.concat([decipher.update(Buffer.from(hex, 'hex')), decipher.final()]);
+  const pad = dec[dec.length - 1];
+  if (pad > dec.length) return false;
+  return dec.slice(0, dec.length - pad).toString('utf8');
 }
 
 /* ── HTTPS PATCH (no fetch dependency) ── */
@@ -59,27 +64,36 @@ async function updateOrderStatus(orderRef, status) {
   }
 }
 
-/* ── Handler ── */
+/* ── Handler — Hesabe POSTs (or GETs) the encrypted result here ── */
 export default async function handler(req, res) {
   try {
-    const raw = req.method === 'POST' ? req.body?.data : req.query?.data;
+    const raw = (req.method === 'POST' ? req.body?.data : req.query?.data);
     if (!raw) return res.redirect(302, '/payment-failed.html?reason=no_data');
 
-    const result   = decrypt(raw);
-    const orderRef = result.orderReferenceNumber || '';
+    const plain = decrypt(raw);
+    if (!plain) return res.redirect(302, '/payment-failed.html?reason=decrypt');
 
-    if (result?.status === 1) {
+    const decoded  = JSON.parse(plain);
+    const r        = decoded.response || decoded;          // transaction details
+    const orderRef = r.orderReferenceNumber || decoded.orderReferenceNumber || '';
+    const code     = String(r.resultCode || '').toUpperCase();
+
+    const success =
+      decoded.status === true &&
+      (code === '' || ['CAPTURED', 'SUCCESS', 'ACCEPT'].includes(code));
+
+    if (success) {
       if (orderRef) await updateOrderStatus(orderRef, 'new');
       const params = new URLSearchParams({
         ref:    orderRef,
-        amount: result.amount    || '',
-        txn:    result.paymentId || '',
+        amount: r.amount    || '',
+        txn:    r.paymentId || '',
       });
       return res.redirect(302, `/payment-success.html?${params}`);
     }
 
     if (orderRef) await updateOrderStatus(orderRef, 'cancelled');
-    return res.redirect(302, `/payment-failed.html?reason=${result?.status || 'unknown'}`);
+    return res.redirect(302, `/payment-failed.html?reason=${code || 'declined'}`);
 
   } catch (err) {
     console.error('Callback error:', err.message);
