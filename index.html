@@ -453,60 +453,54 @@ async function submitAddress() {
     return;
   }
 
-  /* ── بطاقة: تشفير client-side → Hesabe مباشرة ── */
+  /* ── بطاقة: form submit مباشر لـ Hesabe (بدون fetch / بدون CORS) ── */
   btn.textContent = '⏳ جاري التوجيه…';
+
+  /* حفظ الطلب في Supabase */
   try {
-    /* حفظ الطلب في Supabase */
-    try {
-      await supabase.from('orders').insert([{
-        order_ref:      orderRef,
-        customer_name:  name,
-        customer_phone: phone,
-        address:        address,
-        notes:          notes || null,
-        items:          cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
-        total:          parseFloat(total.toFixed(3)),
-        payment_method: 'card',
-        status:         'pending_payment',
-      }]);
-    } catch(e) { console.warn('Order save:', e); }
+    await supabase.from('orders').insert([{
+      order_ref:      orderRef,
+      customer_name:  name,
+      customer_phone: phone,
+      address:        address,
+      notes:          notes || null,
+      items:          cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
+      total:          parseFloat(total.toFixed(3)),
+      payment_method: 'card',
+      status:         'pending_payment',
+    }]);
+  } catch(e) { console.warn('Order save:', e); }
 
-    /* تشفير بيانات الدفع */
-    const paymentData = {
-      merchantCode:         HB_MERCHANT,
-      amount:               total.toFixed(3),
-      paymentType:          0,
-      responseUrl:          `${location.origin}/api/payment-callback`,
-      failureUrl:           `${location.origin}/payment-failed.html`,
-      version:              '2.0',
-      orderReferenceNumber: orderRef,
-      variable1:            name,
-      variable2:            phone,
-      variable3:            address,
-      variable4:            '',
-      variable5:            '',
-    };
-    const encrypted = hesabeEncrypt(JSON.stringify(paymentData));
+  /* تشفير بيانات الدفع */
+  const paymentData = {
+    merchantCode:         HB_MERCHANT,
+    amount:               total.toFixed(3),
+    paymentType:          0,
+    responseUrl:          `${location.origin}/api/payment-callback`,
+    failureUrl:           `${location.origin}/payment-failed.html`,
+    version:              '2.0',
+    orderReferenceNumber: orderRef,
+    variable1:            name,
+    variable2:            phone,
+    variable3:            address,
+    variable4:            '',
+    variable5:            '',
+  };
+  const encrypted = hesabeEncrypt(JSON.stringify(paymentData));
 
-    /* إرسال لـ Hesabe والحصول على رابط الدفع */
-    const hbRes  = await fetch(HB_URL, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'accessCode': HB_ACCESS },
-      body:    JSON.stringify({ data: encrypted }),
-    });
-    const hbData = await hbRes.json();
-
-    if (hbData?.status === 1 && hbData?.response) {
-      localStorage.removeItem('bnwgnad_cart');
-      window.location.href = hbData.response;
-    } else {
-      throw new Error(hbData?.message || 'رفضت بوابة الدفع الطلب');
-    }
-  } catch(err) {
-    showToast('❌ ' + err.message, 'error');
-    btn.textContent = 'الدفع بالبطاقة ←';
-    btn.disabled = false;
-  }
+  /* إنشاء form مخفي وإرسالها — بدون fetch وبدون CORS */
+  localStorage.removeItem('bnwgnad_cart');
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = HB_URL;
+  form.style.display = 'none';
+  [['data', encrypted], ['accessCode', HB_ACCESS]].forEach(([n, v]) => {
+    const inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = n; inp.value = v;
+    form.appendChild(inp);
+  });
+  document.body.appendChild(form);
+  form.submit();
 }
 
 /* ─── Toast ─── */
