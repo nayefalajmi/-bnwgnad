@@ -65,9 +65,9 @@
 
 <div class="result-page">
   <div class="result-card">
-    <div class="result-icon">✅</div>
-    <h2>تم الدفع بنجاح!</h2>
-    <p>شكراً لطلبك من بن وقناد</p>
+    <div class="result-icon" id="resultIcon">✅</div>
+    <h2 id="resultTitle">تم الدفع بنجاح!</h2>
+    <p id="resultSubtitle">شكراً لطلبك من بن وقناد</p>
 
     <div style="margin: 1.5rem 0" id="details"></div>
 
@@ -80,6 +80,15 @@
   const p = new URLSearchParams(location.search);
   const details = document.getElementById('details');
   const isCash = p.get('method') === 'cash';
+
+  // عنوان مختلف حسب طريقة الدفع
+  if (isCash) {
+    document.getElementById('resultIcon').textContent     = '📦';
+    document.getElementById('resultTitle').textContent    = 'تم استلام الطلب!';
+    document.getElementById('resultSubtitle').textContent = 'شكراً لطلبك من بن وقناد — بنتواصل معك قريباً';
+    document.title = 'تم استلام الطلب | بن وقناد';
+  }
+
   const rows = [
     ['رقم الطلب',   p.get('ref')    || '—'],
     ['المبلغ',      p.get('amount') ? p.get('amount') + ' د.ك' : '—'],
