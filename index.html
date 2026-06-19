@@ -207,13 +207,11 @@ function renderProducts(list) {
     const price = parseFloat(p.Price||0).toFixed(2);
     const imgHtml = p.image_url
       ? `<img src="${p.image_url}" alt="${p.Name}" loading="lazy" />`
-      : `<span class="product-icon-fallback">${getIcon(p.Name, p.Category)}</span>`;
+      : `<img src="logo.png" alt="${p.Name}" loading="lazy" class="product-img-logo" />`;
     return `
     <div class="product-card" id="card-${p.id}">
       <div class="product-img-wrap">${imgHtml}</div>
       <h3>${p.Name}</h3>
-      <p class="category">${p.Category||''}</p>
-      ${p.Description ? `<p class="description">${p.Description}</p>` : ''}
       <div class="price-row">
         <p class="price">${price} <span>د.ك</span></p>
         <div class="card-qty-ctrl" id="cardqty-${p.id}">${cardQtyHtml(p.id)}</div>
