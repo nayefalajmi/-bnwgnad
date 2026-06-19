@@ -238,6 +238,13 @@ body {
   height: 100%;
   object-fit: cover;
 }
+/* صورة احتياطية (اللوجو) للمنتجات بدون صورة */
+.product-img-wrap img.product-img-logo {
+  object-fit: contain;
+  padding: 18%;
+  background: var(--bg);
+  opacity: .85;
+}
 .product-img-wrap .product-icon-fallback {
   font-size: 2.6rem;
 }
