@@ -212,8 +212,6 @@ function renderProducts(list) {
     <div class="product-card" id="card-${p.id}">
       <div class="product-img-wrap">${imgHtml}</div>
       <h3>${p.Name}</h3>
-      <p class="category">${p.Category||''}</p>
-      ${p.Description ? `<p class="description">${p.Description}</p>` : ''}
       <div class="price-row">
         <p class="price">${price} <span>د.ك</span></p>
         <div class="card-qty-ctrl" id="cardqty-${p.id}">${cardQtyHtml(p.id)}</div>

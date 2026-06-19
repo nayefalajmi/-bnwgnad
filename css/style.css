@@ -139,16 +139,20 @@ body {
 ══════════════════════════════ */
 .filters {
   display: flex;
-  gap: .6rem;
-  flex-wrap: wrap;
-  padding: 1.25rem 2rem;
+  gap: .5rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: .7rem 1rem;
   background: #fff;
   border-bottom: 1px solid var(--border);
-  justify-content: center;
+  justify-content: flex-start;
   position: sticky;
   top: 66px;
   z-index: 100;
 }
+.filters::-webkit-scrollbar { display: none; }
 
 .filter-btn {
   background: transparent;
@@ -157,8 +161,10 @@ body {
   padding: .35rem 1rem;
   border-radius: 2rem;
   cursor: pointer;
-  font-size: .88rem;
+  font-size: .85rem;
   font-family: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: all .2s;
 }
 .filter-btn:hover, .filter-btn.active {
@@ -172,8 +178,8 @@ body {
 ══════════════════════════════ */
 .products-section {
   max-width: 1200px;
-  margin: 2rem auto;
-  padding: 0 1.5rem;
+  margin: 1.5rem auto;
+  padding: 0 1rem;
 }
 
 .section-title {
@@ -194,20 +200,22 @@ body {
 
 .products-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 1.1rem;
+  grid-template-columns: repeat(2, 1fr);   /* Instagram-style: عمودان على الجوال */
+  gap: .6rem;
 }
+@media (min-width: 600px) { .products-grid { grid-template-columns: repeat(3, 1fr); gap: .9rem; } }
+@media (min-width: 900px) { .products-grid { grid-template-columns: repeat(4, 1fr); } }
 
 .product-card {
   background: var(--card-bg);
-  border-radius: var(--radius);
-  padding: 1.1rem;
+  border-radius: 12px;
+  padding: 0;
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
   transition: transform .2s, box-shadow .2s;
   display: flex;
   flex-direction: column;
-  gap: .4rem;
+  overflow: hidden;
   position: relative;
 }
 .product-card:hover {
@@ -215,17 +223,15 @@ body {
   box-shadow: var(--shadow-md);
 }
 
-/* Product image */
+/* Product image — مربعة تأخذ معظم البطاقة */
 .product-img-wrap {
   width: 100%;
-  height: 150px;
-  border-radius: 10px;
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   background: var(--bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: .25rem;
 }
 .product-img-wrap img {
   width: 100%;
@@ -233,41 +239,46 @@ body {
   object-fit: cover;
 }
 .product-img-wrap .product-icon-fallback {
-  font-size: 3rem;
+  font-size: 2.6rem;
 }
 
-.product-card h3 { font-size: .97rem; color: var(--primary); }
-.product-card .category { font-size: .78rem; color: var(--text-muted); }
-.product-card .description {
-  font-size: .8rem;
-  color: var(--text-muted);
-  line-height: 1.5;
-  flex: 1;
+.product-card h3 {
+  font-size: .82rem;
+  color: var(--primary);
+  padding: .45rem .55rem 0;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .product-card .price-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: .5rem;
+  gap: .3rem;
+  padding: .15rem .55rem .55rem;
+  margin-top: auto;
 }
 
 .product-card .price {
-  font-size: 1.1rem;
+  font-size: .92rem;
   font-weight: 700;
   color: var(--accent);
+  white-space: nowrap;
 }
-.product-card .price span { font-size: .78rem; font-weight: 400; }
+.product-card .price span { font-size: .7rem; font-weight: 400; }
 
 .add-btn {
   background: var(--primary);
   color: #fff;
   border: none;
   border-radius: 8px;
-  padding: .38rem .85rem;
-  font-size: .82rem;
+  padding: .3rem .6rem;
+  font-size: .72rem;
   font-family: inherit;
   cursor: pointer;
+  white-space: nowrap;
   transition: background .2s, transform .1s;
 }
 .add-btn:hover  { background: var(--primary-light); }
@@ -828,20 +839,20 @@ tbody td { padding: .6rem 1rem; font-size: .86rem; vertical-align: middle; }
 .card-qty-inline {
   display: flex;
   align-items: center;
-  gap: .35rem;
+  gap: .25rem;
   background: var(--bg);
   border: 1.5px solid var(--border);
   border-radius: 2rem;
-  padding: .2rem .4rem;
+  padding: .12rem .25rem;
 }
 
 .cq-btn {
-  width: 28px; height: 28px;
+  width: 24px; height: 24px;
   border-radius: 50%;
   border: none;
   background: var(--primary);
   color: #fff;
-  font-size: 1rem;
+  font-size: .9rem;
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -854,9 +865,9 @@ tbody td { padding: .6rem 1rem; font-size: .86rem; vertical-align: middle; }
 .cq-btn:active { transform: scale(.9); }
 
 .cq-num {
-  min-width: 22px;
+  min-width: 18px;
   text-align: center;
-  font-size: .95rem;
+  font-size: .85rem;
   font-weight: 700;
   color: var(--primary);
 }
