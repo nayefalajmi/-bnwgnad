@@ -169,64 +169,11 @@
     .top5-bar-track { background: var(--bg); border-radius: 1rem; height: 9px; overflow: hidden; }
     .top5-bar-fill  { height: 100%; background: var(--accent); border-radius: 1rem; transition: width .7s ease; }
 
-    /* ── Login gate ── */
-    body.locked > .navbar,
-    body.locked > .admin-layout,
-    body.locked > .modal-overlay,
-    body.locked > .toast { display: none !important; }
-
-    #loginGate { display: none; }
-    body.locked #loginGate {
-      display: flex;
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
-      align-items: center;
-      justify-content: center;
-      padding: 1.5rem;
-      background: linear-gradient(135deg, #3b1f08, #5a3410);
-    }
-    .login-card {
-      background: #fff;
-      border-radius: 18px;
-      padding: 2.5rem 2rem;
-      width: 100%;
-      max-width: 360px;
-      text-align: center;
-      box-shadow: 0 12px 50px rgba(0,0,0,.3);
-    }
-    .login-logo { font-size: 2.8rem; margin-bottom: .5rem; }
-    .login-card h2 { color: var(--primary); font-size: 1.3rem; margin-bottom: .3rem; }
-    .login-sub { color: var(--text-muted); font-size: .9rem; margin-bottom: 1.5rem; }
-    .login-card input {
-      width: 100%;
-      padding: .8rem 1rem;
-      margin-bottom: .8rem;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      font-family: inherit;
-      font-size: .95rem;
-      box-sizing: border-box;
-    }
-    .login-card input:focus { outline: none; border-color: var(--accent); }
-    .login-card button { width: 100%; padding: .8rem; font-size: 1rem; margin-top: .3rem; }
-    .login-err { color: #c0392b; font-size: .85rem; min-height: 1.2rem; margin-bottom: .4rem; }
+    /* إخفاء المحتوى حتى يتم التحقق من جلسة الدخول */
+    body.auth-pending { visibility: hidden; }
   </style>
 </head>
-<body class="locked">
-
-<!-- ══ LOGIN GATE ══ -->
-<div id="loginGate">
-  <form class="login-card" onsubmit="return doLogin(event)">
-    <div class="login-logo">🔐</div>
-    <h2>لوحة تحكم بن وقناد</h2>
-    <p class="login-sub">سجّل الدخول للمتابعة</p>
-    <input type="text"     id="loginUser" placeholder="اسم المستخدم"   autocomplete="username" />
-    <input type="password" id="loginPass" placeholder="كلمة المرور"    autocomplete="current-password" />
-    <div class="login-err" id="loginErr"></div>
-    <button type="submit" class="btn btn-accent">دخول</button>
-  </form>
-</div>
+<body class="auth-pending">
 
 <!-- ══ NAVBAR ══ -->
 <header class="navbar">
@@ -240,7 +187,8 @@
   </a>
   <div class="navbar-actions">
     <a href="index.html">🏪 المتجر</a>
-    <a href="admin.html" style="color:var(--accent-light)">⚙️ التحكم</a>
+    <span id="adminEmail" style="color:var(--accent-light);font-size:.85rem"></span>
+    <button class="cart-btn" onclick="logout()" style="background:#c0392b">🚪 خروج</button>
   </div>
 </header>
 
@@ -256,6 +204,7 @@
     </a>
     <a href="#" data-section="stats" onclick="switchSection(event,'stats')">📊 الإحصائيات</a>
     <a href="index.html">🏪 المتجر</a>
+    <a href="#" onclick="changePassword(event)">🔑 تغيير كلمة المرور</a>
     <a href="#" onclick="logout(event)" style="color:#c0392b">🚪 تسجيل الخروج</a>
   </aside>
 
@@ -1101,10 +1050,8 @@ function showToast(msg, type = '') {
 }
 
 /* ════════════════════════════════════════
-   LOGIN GATE
+   AUTH (Supabase)
 ════════════════════════════════════════ */
-const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'bnwgnad2020';
 let adminStarted = false;
 
 function initAdmin() {
@@ -1114,39 +1061,36 @@ function initAdmin() {
   startPolling();
 }
 
-function unlock() {
-  document.body.classList.remove('locked');
-  initAdmin();
-}
-
-function doLogin(e) {
-  e.preventDefault();
-  const u = document.getElementById('loginUser').value.trim();
-  const p = document.getElementById('loginPass').value;
-  if (u === ADMIN_USER && p === ADMIN_PASS) {
-    sessionStorage.setItem('adm', '1');
-    document.getElementById('loginErr').textContent = '';
-    unlock();
-  } else {
-    document.getElementById('loginErr').textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة';
-    document.getElementById('loginPass').value = '';
-    document.getElementById('loginPass').focus();
-  }
-  return false;
-}
-
-function logout(e) {
+async function logout(e) {
   if (e) e.preventDefault();
-  sessionStorage.removeItem('adm');
-  location.reload();
+  await supabase.auth.signOut();
+  window.location.replace('login.html');
 }
 
-/* عند فتح الصفحة: افتح مباشرة لو الجلسة مفعّلة، وإلا اعرض صفحة الدخول */
-if (sessionStorage.getItem('adm') === '1') {
-  unlock();
-} else {
-  document.getElementById('loginUser').focus();
+async function changePassword(e) {
+  if (e) e.preventDefault();
+  const p = prompt('اكتب كلمة المرور الجديدة (6 أحرف على الأقل):');
+  if (p === null) return;                       // ألغى المستخدم
+  if (p.length < 6) { showToast('⚠️ كلمة المرور قصيرة جداً', 'error'); return; }
+  const { error } = await supabase.auth.updateUser({ password: p });
+  if (error) { showToast('❌ فشل التغيير: ' + error.message, 'error'); return; }
+  showToast('✅ تم تغيير كلمة المرور', 'success');
 }
+
+/* حارس الجلسة: لو ما فيه تسجيل دخول، حوّل لصفحة الدخول */
+(async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) { window.location.replace('login.html'); return; }
+  const emailEl = document.getElementById('adminEmail');
+  if (emailEl) emailEl.textContent = session.user.email || '';
+  document.body.classList.remove('auth-pending');
+  initAdmin();
+})();
+
+/* لو سجّل خروج من تبويب ثاني، رجّعه لصفحة الدخول */
+supabase.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_OUT') window.location.replace('login.html');
+});
 </script>
 </body>
 </html>
