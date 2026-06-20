@@ -21,13 +21,13 @@ returns table (ok boolean, used boolean, discount_type text, discount_value nume
 language plpgsql security definer set search_path = public as $$
 declare d_type text; d_value numeric; v_used boolean;
 begin
-  -- صلاحية الكود نفسه
-  select discount_type, discount_value into d_type, d_value
-  from discount_codes
-  where lower(code) = lower(trim(p_code))
-    and active = true
-    and (expires_at is null or expires_at > now())
-    and (max_uses  is null or used_count < max_uses)
+  -- صلاحية الكود نفسه (نؤهّل الأعمدة باسم الجدول لتفادي تعارضها مع أعمدة الإخراج)
+  select dc.discount_type, dc.discount_value into d_type, d_value
+  from discount_codes dc
+  where lower(dc.code) = lower(trim(p_code))
+    and dc.active = true
+    and (dc.expires_at is null or dc.expires_at > now())
+    and (dc.max_uses  is null or dc.used_count < dc.max_uses)
   limit 1;
 
   if not found then
