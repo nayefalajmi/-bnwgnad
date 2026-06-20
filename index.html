@@ -200,6 +200,11 @@ let activeCat   = 'all';       // 'all' أو معرّف فئة (id)
 let searchTerm  = '';
 let cart = JSON.parse(localStorage.getItem('bnwgnad_cart') || '[]');
 
+/* مفتاح سطر السلة (منتج + متغيّر) + تطبيع السلة القديمة */
+function cartKey(id, variant) { return variant ? `${id}|${variant}` : String(id); }
+function cartFind(key) { return cart.find(c => c.key === key); }
+cart = cart.map(c => ({ ...c, variant: c.variant || null, key: c.key || cartKey(c.id, c.variant || null) }));
+
 /* هل منتج ينتمي للفئة المفعّلة؟ (يدعم الـ ids والاسم للتوافق) */
 function productInActiveCat(p) {
   if (activeCat === 'all') return true;
@@ -284,10 +289,28 @@ function renderProducts(list) {
     return;
   }
   grid.innerHTML = list.map(p => {
-    const price = parseFloat(p.Price||0).toFixed(2);
     const imgHtml = p.image_url
       ? `<img src="${p.image_url}" alt="${p.Name}" loading="lazy" />`
       : `<img src="logo.png" alt="${p.Name}" loading="lazy" class="product-img-logo" />`;
+
+    const variants = Array.isArray(p.variants) ? p.variants.filter(v => v && v.label) : [];
+    if (variants.length) {
+      const first = parseFloat(variants[0].price || 0).toFixed(2);
+      const opts = variants.map((v, i) =>
+        `<option value="${i}">${v.label}</option>`).join('');
+      return `
+      <div class="product-card" id="card-${p.id}">
+        <div class="product-img-wrap">${imgHtml}</div>
+        <h3>${p.Name}</h3>
+        <select class="variant-sel" id="vsel-${p.id}" onchange="onVariantChange(${p.id})">${opts}</select>
+        <div class="price-row">
+          <p class="price"><span id="vprice-${p.id}">${first}</span> <span>د.ك</span></p>
+          <button class="add-btn" onclick="addVariant(${p.id})">＋ أضف</button>
+        </div>
+      </div>`;
+    }
+
+    const price = parseFloat(p.Price||0).toFixed(2);
     return `
     <div class="product-card" id="card-${p.id}">
       <div class="product-img-wrap">${imgHtml}</div>
@@ -300,9 +323,38 @@ function renderProducts(list) {
   }).join('');
 }
 
-/* Returns the correct HTML for a card's qty control */
+/* تغيّر المتغيّر المختار → حدّث السعر المعروض */
+function onVariantChange(id) {
+  const sel = document.getElementById('vsel-' + id);
+  const p = allProducts.find(x => x.id === id);
+  if (!sel || !p) return;
+  const v = (p.variants || [])[Number(sel.value)];
+  const el = document.getElementById('vprice-' + id);
+  if (v && el) el.textContent = parseFloat(v.price || 0).toFixed(2);
+}
+
+/* إضافة المتغيّر المختار للسلة */
+function addVariant(id) {
+  const sel = document.getElementById('vsel-' + id);
+  const p = allProducts.find(x => x.id === id);
+  if (!p) return;
+  const v = (p.variants || [])[Number(sel ? sel.value : 0)];
+  if (!v) return;
+  const price = parseFloat(v.price || 0);
+  const key = cartKey(id, v.label);
+  const existing = cartFind(key);
+  if (existing) existing.qty++;
+  else cart.push({ key, id: p.id, name: p.Name, variant: v.label, price,
+                   image: p.image_url || null, icon: getIcon(p.Name, p.Category), qty: 1 });
+  saveCart();
+  renderCartItems();
+  trackAddToCart({ id: p.id, name: `${p.Name} - ${v.label}`, price });
+  showToast(`✅ أُضيف للسلة: ${v.label}`);
+}
+
+/* Returns the correct HTML for a card's qty control (منتجات بلا متغيّرات) */
 function cardQtyHtml(id) {
-  const item = cart.find(c => c.id === id);
+  const item = cartFind(String(id));
   if (!item) {
     return `<button class="add-btn" onclick="cardAdd(${id})">＋ أضف</button>`;
   }
@@ -324,7 +376,7 @@ function cardAdd(id) {
   const p = allProducts.find(x => x.id === id);
   if (!p) return;
   const price = parseFloat(p.Price||0);
-  cart.push({ id: p.id, name: p.Name, price, image: p.image_url || null, icon: getIcon(p.Name, p.Category), qty: 1 });
+  cart.push({ key: String(id), id: p.id, name: p.Name, variant: null, price, image: p.image_url || null, icon: getIcon(p.Name, p.Category), qty: 1 });
   saveCart();
   refreshCardQty(id);
   renderCartItems();
@@ -332,7 +384,7 @@ function cardAdd(id) {
 }
 
 function cardInc(id) {
-  const item = cart.find(c => c.id === id);
+  const item = cartFind(String(id));
   if (!item) return;
   item.qty++;
   saveCart();
@@ -341,10 +393,10 @@ function cardInc(id) {
 }
 
 function cardDec(id) {
-  const item = cart.find(c => c.id === id);
+  const item = cartFind(String(id));
   if (!item) return;
   item.qty--;
-  if (item.qty <= 0) cart = cart.filter(c => c.id !== id);
+  if (item.qty <= 0) cart = cart.filter(c => c.key !== String(id));
   saveCart();
   refreshCardQty(id);
   renderCartItems();
@@ -365,17 +417,18 @@ function updateCartCount() {
   badge.style.display = total > 0 ? 'flex' : 'none';
 }
 
-/* qty changes from inside the sidebar */
-function changeQty(id, delta) {
-  const item = cart.find(c => c.id === id);
+/* qty changes from inside the sidebar (بالمفتاح) */
+function changeQty(key, delta) {
+  const item = cartFind(key);
   if (!item) return;
   item.qty += delta;
-  if (item.qty <= 0) cart = cart.filter(c => c.id !== id);
+  const pid = item.id, wasVariant = !!item.variant;
+  if (item.qty <= 0) cart = cart.filter(c => c.key !== key);
   saveCart();
-  refreshCardQty(id);
+  if (!wasVariant) refreshCardQty(pid);   // المتغيّرات بلا تحكّم على البطاقة
   renderCartItems();
 }
-function removeFromCart(id) { changeQty(id, -999); }
+function removeFromCart(key) { changeQty(key, -999); }
 
 function renderCartItems() {
   const el     = document.getElementById('cartItems');
@@ -387,19 +440,22 @@ function renderCartItems() {
   }
   el.innerHTML = cart.map(item => {
     const imgHtml = item.image ? `<img src="${item.image}" alt="${item.name}" />` : item.icon;
+    const title = item.variant
+      ? `${item.name} <span class="cart-variant">${item.variant}</span>`
+      : item.name;
     return `
     <div class="cart-item">
       <div class="cart-item-img">${imgHtml}</div>
       <div class="cart-item-info">
-        <h4>${item.name}</h4>
+        <h4>${title}</h4>
         <p class="item-price">${(item.price * item.qty).toFixed(2)} د.ك</p>
       </div>
       <div class="qty-ctrl">
-        <button class="qty-btn" onclick="changeQty(${item.id},-1)">−</button>
+        <button class="qty-btn" onclick="changeQty('${item.key}',-1)">−</button>
         <span class="qty-num">${item.qty}</span>
-        <button class="qty-btn" onclick="changeQty(${item.id}, 1)">＋</button>
+        <button class="qty-btn" onclick="changeQty('${item.key}', 1)">＋</button>
       </div>
-      <button class="cart-item-remove" onclick="removeFromCart(${item.id})" title="حذف">✕</button>
+      <button class="cart-item-remove" onclick="removeFromCart('${item.key}')" title="حذف">✕</button>
     </div>`;
   }).join('');
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
@@ -444,7 +500,7 @@ function startCheckout() {
       <p class="addr-summary-title">ملخص الطلب</p>
       ${cart.map(i =>
         `<div class="addr-summary-row">
-          <span>${i.name} × ${i.qty}</span>
+          <span>${i.variant ? i.name + ' - ' + i.variant : i.name} × ${i.qty}</span>
           <span>${(i.price * i.qty).toFixed(2)} د.ك</span>
         </div>`
       ).join('')}
@@ -503,7 +559,7 @@ async function submitAddress() {
         customer_phone: phone,
         address:        address,
         notes:          notes || null,
-        items:          cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
+        items:          cart.map(i => ({ id: i.id, name: i.variant ? i.name + ' - ' + i.variant : i.name, variant: i.variant || null, price: i.price, qty: i.qty })),
         total:          parseFloat(total.toFixed(3)),
         payment_method: 'cash',
         status:         'new'
@@ -525,7 +581,7 @@ async function submitAddress() {
       body: JSON.stringify({
         amount:   total.toFixed(3),
         orderRef,
-        items:    cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
+        items:    cart.map(i => ({ id: i.id, name: i.variant ? i.name + ' - ' + i.variant : i.name, variant: i.variant || null, price: i.price, qty: i.qty })),
         customer: { name, phone, address, notes: notes || '' },
       }),
     });

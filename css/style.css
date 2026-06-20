@@ -339,6 +339,34 @@ body {
   text-overflow: ellipsis;
 }
 
+/* اختيار المتغيّر داخل بطاقة المنتج */
+.variant-sel {
+  margin: .35rem .55rem 0;
+  width: calc(100% - 1.1rem);
+  padding: .3rem .5rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: .8rem;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+}
+.variant-sel:focus { outline: none; border-color: var(--accent); }
+
+/* وسم المتغيّر في السلة */
+.cart-variant {
+  display: inline-block;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 0 .45rem;
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-right: .25rem;
+}
+
 .product-card .price-row {
   display: flex;
   align-items: center;
