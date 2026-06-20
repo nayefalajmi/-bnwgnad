@@ -146,6 +146,33 @@
     .orders-empty { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 1.05rem; }
     .header-actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
 
+    /* ── إدارة الفريق ── */
+    .team-add-row { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .team-add-row input { flex: 1; min-width: 220px; padding: .55rem .7rem; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: .9rem; }
+    .team-member { border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.15rem; margin-bottom: 1rem; background: #fff; }
+    .team-member-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; margin-bottom: .85rem; padding-bottom: .65rem; border-bottom: 1px solid var(--border); }
+    .team-member-email { font-weight: 700; color: var(--primary); font-size: .95rem; word-break: break-all; }
+    .perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .5rem .9rem; }
+    .perm-item { display: flex; align-items: center; justify-content: space-between; gap: .5rem; font-size: .82rem; padding: .25rem 0; }
+    .perm-group-title { grid-column: 1 / -1; font-weight: 700; font-size: .8rem; color: var(--text-muted); margin-top: .4rem; }
+    .perm-toggle { position: relative; width: 42px; height: 23px; border-radius: 12px; border: none; cursor: pointer; flex-shrink: 0; transition: background .2s; }
+    .perm-toggle.on  { background: var(--success); }
+    .perm-toggle.off { background: #ccc; }
+    .perm-toggle::after { content: ''; position: absolute; top: 3px; width: 17px; height: 17px; border-radius: 50%; background: #fff; transition: right .2s; }
+    .perm-toggle.on::after  { right: 3px; }
+    .perm-toggle.off::after { right: 22px; }
+
+    /* ── تفاصيل الطلب ── */
+    .od-section { margin-bottom: 1rem; }
+    .od-section h4 { font-size: .85rem; color: var(--primary); margin-bottom: .4rem; font-weight: 700; }
+    .od-row { display: flex; justify-content: space-between; gap: 1rem; font-size: .85rem; padding: .25rem 0; border-bottom: 1px dashed var(--border); }
+    .od-row:last-child { border-bottom: none; }
+    .od-items { width: 100%; border-collapse: collapse; font-size: .84rem; }
+    .od-items th, .od-items td { padding: .4rem .5rem; text-align: right; border-bottom: 1px solid var(--border); }
+    .od-items th { color: var(--text-muted); font-weight: 600; font-size: .78rem; }
+    .od-total-row { font-weight: 800; color: var(--accent); }
+    .order-card.clickable { cursor: pointer; }
+
     /* ── Enhanced Stats ── */
     .stats-section-title {
       font-size: 1rem;
@@ -373,6 +400,7 @@
     <a href="#" data-section="stats" onclick="switchSection(event,'stats')">📊 الإحصائيات</a>
     <a href="#" data-section="banner" onclick="switchSection(event,'banner')">🖼️ البنر الإعلاني</a>
     <a href="#" data-section="accountant" onclick="switchSection(event,'accountant')">🧮 المحاسب الذكي</a>
+    <a href="#" data-section="team" id="navTeam" onclick="switchSection(event,'team')" style="display:none">👥 إدارة الفريق</a>
     <a href="index.html">🏪 المتجر</a>
     <a href="#" onclick="changePassword(event)">🔑 تغيير كلمة المرور</a>
     <a href="#" onclick="logout(event)" style="color:#c0392b">🚪 تسجيل الخروج</a>
@@ -426,7 +454,7 @@
     <div id="sec-products">
       <div class="admin-header">
         <h2>📦 إدارة المنتجات</h2>
-        <button class="btn btn-accent" onclick="openModal()">➕ إضافة منتج</button>
+        <button class="btn btn-accent" id="addProductBtn" onclick="openModal()">➕ إضافة منتج</button>
       </div>
 
       <div class="search-bar">
@@ -681,6 +709,27 @@
       </div>
     </div>
 
+    <!-- ── Team / Permissions (المالك فقط) ── -->
+    <div id="sec-team" style="display:none">
+      <div class="admin-header">
+        <h2>👥 إدارة الفريق والصلاحيات</h2>
+      </div>
+      <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1rem">
+        أضف بائعاً بإيميله ثم افتح/اقفل كل صلاحية على حدة. تُحفظ التغييرات فوراً.
+        ملاحظة: أنشئ حساب الدخول للبائع من Supabase ▸ Authentication ▸ Users بنفس الإيميل.
+      </p>
+
+      <div class="team-add-row">
+        <input type="email" id="newMemberEmail" placeholder="إيميل البائع الجديد…" dir="ltr"
+               onkeydown="if(event.key==='Enter')addTeamMember()" />
+        <button class="btn btn-accent" onclick="addTeamMember()">➕ إضافة بائع</button>
+      </div>
+
+      <div id="teamList">
+        <div class="orders-empty"><div class="spinner" style="margin:0 auto 1rem"></div><p>جاري التحميل…</p></div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -761,6 +810,15 @@
       <button class="btn btn-danger"  onclick="confirmDelete()">نعم، احذف</button>
       <button class="btn btn-outline" onclick="closeDelete()">إلغاء</button>
     </div>
+  </div>
+</div>
+
+<!-- ══ ORDER DETAILS MODAL ══ -->
+<div class="modal-overlay" id="orderOverlay" onclick="overlayClick(event,'orderOverlay',closeOrderDetails)">
+  <div class="modal" style="max-width:520px">
+    <h3 class="modal-title">🧾 تفاصيل الطلب</h3>
+    <div id="orderDetailsBody"></div>
+    <div class="modal-footer" id="orderDetailsActions"></div>
   </div>
 </div>
 
@@ -990,8 +1048,228 @@ async function exportExcel() {
   }
 }
 
+/* ════════════════════════════════════════
+   TEAM PERMISSIONS (الصلاحيات)
+════════════════════════════════════════ */
+const OWNER_EMAIL = 'bnwgnad@gmail.com';
+let isOwner = false, myEmail = '', myPerms = {};
+const ALL_PERMS = ['orders_view','orders_status','orders_delete','products_view','products_edit','products_add','products_delete','zones','categories','stats','accountant','banner','loyalty','discounts'];
+const PERM_LABELS = {
+  orders_view:'عرض الطلبات', orders_status:'تغيير حالة الطلب', orders_delete:'حذف الطلبات',
+  products_view:'عرض المنتجات', products_edit:'تعديل المنتجات', products_add:'إضافة المنتجات', products_delete:'حذف المنتجات',
+  zones:'رسوم التوصيل', categories:'الفئات', stats:'الإحصائيات', accountant:'المحاسب الذكي',
+  banner:'البنر', loyalty:'نظام الولاء', discounts:'أكواد الخصم'
+};
+const PERM_GROUPS = [
+  { title:'الطلبات',  keys:['orders_view','orders_status','orders_delete'] },
+  { title:'المنتجات', keys:['products_view','products_edit','products_add','products_delete'] },
+  { title:'أقسام أخرى', keys:['zones','categories','stats','accountant','banner','loyalty','discounts'] },
+];
+const SECTION_PERM = { products:'products_view', orders:'orders_view', stats:'stats', banner:'banner', accountant:'accountant', categories:'categories', zones:'zones', discounts:'discounts', loyalty:'loyalty' };
+
+function can(p) { return isOwner || myPerms[p] === true; }
+
+function sectionAllowed(name) {
+  if (name === 'team') return isOwner;
+  const need = SECTION_PERM[name];
+  return need ? can(need) : true;
+}
+
+async function loadMyPermissions(email) {
+  myEmail = email || '';
+  isOwner = myEmail.trim().toLowerCase() === OWNER_EMAIL;
+  if (isOwner) { myPerms = {}; ALL_PERMS.forEach(k => myPerms[k] = true); return; }
+  try {
+    const { data } = await supabase.from('team_members').select('permissions').eq('email', myEmail).maybeSingle();
+    myPerms = (data && data.permissions) || {};
+  } catch (e) { myPerms = {}; }
+}
+
+/* إظهار/إخفاء عناصر الواجهة حسب الصلاحيات */
+function applyPermissionsUI() {
+  document.querySelectorAll('.admin-sidebar a[data-section]').forEach(a => {
+    a.style.display = sectionAllowed(a.dataset.section) ? '' : 'none';
+  });
+  const addBtn = document.getElementById('addProductBtn');
+  if (addBtn) addBtn.style.display = can('products_add') ? '' : 'none';
+}
+
+function firstAllowedSection() {
+  const order = ['products','orders','categories','zones','discounts','loyalty','stats','banner','accountant','team'];
+  return order.find(sectionAllowed) || null;
+}
+
+/* ════════════════════════════════════════
+   TEAM MANAGEMENT (المالك فقط)
+════════════════════════════════════════ */
+let teamMembers = [];
+
+async function loadTeam() {
+  const wrap = document.getElementById('teamList');
+  const { data, error } = await supabase.from('team_members').select('*').order('created_at');
+  if (error) { wrap.innerHTML = `<div class="orders-empty">❌ تعذّر التحميل: ${esc(error.message)}</div>`; return; }
+  teamMembers = data || [];
+  renderTeam();
+}
+
+function renderTeam() {
+  const wrap = document.getElementById('teamList');
+  if (!teamMembers.length) {
+    wrap.innerHTML = '<div class="orders-empty">لا يوجد بائعون بعد. أضف بائعاً بإيميله من الأعلى.</div>';
+    return;
+  }
+  wrap.innerHTML = teamMembers.map(m => {
+    const perms = m.permissions || {};
+    const groups = PERM_GROUPS.map(g => `
+      <div class="perm-group-title">${g.title}</div>
+      ${g.keys.map(k => `
+        <div class="perm-item">
+          <span>${PERM_LABELS[k]}</span>
+          <button class="perm-toggle ${perms[k] ? 'on' : 'off'}"
+            onclick="togglePerm('${esc(m.email)}','${k}')" title="${perms[k] ? 'مفعّل' : 'مغلق'}"></button>
+        </div>`).join('')}
+    `).join('');
+    return `
+      <div class="team-member">
+        <div class="team-member-head">
+          <span class="team-member-email">📧 ${esc(m.email)}</span>
+          <button class="btn btn-sm btn-danger" onclick="removeTeamMember('${esc(m.email)}')">🗑️ إزالة</button>
+        </div>
+        <div class="perm-grid">${groups}</div>
+      </div>`;
+  }).join('');
+}
+
+async function addTeamMember() {
+  const input = document.getElementById('newMemberEmail');
+  const email = input.value.trim().toLowerCase();
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('⚠️ أدخل إيميلاً صحيحاً', 'error'); return; }
+  if (email === OWNER_EMAIL) { showToast('⚠️ هذا إيميل المالك', 'error'); return; }
+  if (teamMembers.some(m => m.email.toLowerCase() === email)) { showToast('⚠️ البائع مُضاف مسبقاً', 'error'); return; }
+  const defaults = { orders_view: true, products_view: true };   // صلاحيات أولية آمنة
+  const { error } = await supabase.from('team_members').insert([{ email, permissions: defaults }]);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  input.value = '';
+  showToast('✅ تمت إضافة البائع', 'success');
+  loadTeam();
+}
+
+async function togglePerm(email, key) {
+  const m = teamMembers.find(x => x.email === email);
+  if (!m) return;
+  const perms = { ...(m.permissions || {}) };
+  perms[key] = !perms[key];
+  m.permissions = perms;                       // تفاؤلي
+  renderTeam();
+  const { error } = await supabase.from('team_members').update({ permissions: perms }).eq('email', email);
+  if (error) { showToast('❌ ' + error.message, 'error'); loadTeam(); }
+}
+
+async function removeTeamMember(email) {
+  if (!confirm('إزالة هذا البائع وكل صلاحياته؟')) return;
+  const { error } = await supabase.from('team_members').delete().eq('email', email);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  showToast('🗑️ تمت الإزالة', 'success');
+  loadTeam();
+}
+
+/* ════════════════════════════════════════
+   ORDER DETAILS + DELETE
+════════════════════════════════════════ */
+const ORDER_LABELS = {
+  new:'🟡 جديد', preparing:'🔵 قيد التحضير', delivering:'🚚 خرج للتوصيل',
+  completed:'✅ مكتمل', cancelled:'❌ ملغي', pending_payment:'⏳ بانتظار الدفع'
+};
+
+/* أزرار الانتقال بين الحالات (مشتركة بين البطاقة والتفاصيل) */
+function statusButtonsHtml(order, stop) {
+  if (!can('orders_status')) return '';
+  const s = stop ? 'event.stopPropagation();' : '';
+  const map = {
+    new:        [['preparing','🔵 قيد التحضير'],['cancelled','❌ إلغاء']],
+    preparing:  [['delivering','🚚 خرج للتوصيل'],['cancelled','❌ إلغاء']],
+    delivering: [['completed','✅ مكتمل'],['cancelled','❌ إلغاء']],
+    pending_payment: [['new','🟡 تأكيد كطلب جديد'],['cancelled','❌ إلغاء']],
+  };
+  const btns = map[order.status] || [];
+  return btns.map(([st, lbl]) =>
+    `<button class="status-btn status-btn-${st}" onclick="${s}setStatus(${order.id},'${st}')">${lbl}</button>`).join('');
+}
+
+function deleteButtonHtml(order, stop) {
+  if (!can('orders_delete')) return '';
+  const s = stop ? 'event.stopPropagation();' : '';
+  return `<button class="status-btn status-btn-cancelled" onclick="${s}deleteOrder(${order.id})">🗑️ حذف الطلب</button>`;
+}
+
+function openOrderDetails(id) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  const kwd = n => `${parseFloat(n || 0).toFixed(3)} د.ك`;
+  const items = Array.isArray(o.items) ? o.items : [];
+  const itemsRows = items.length
+    ? items.map(i => {
+        const qty = i.qty || 1, price = parseFloat(i.price || 0);
+        return `<tr><td>${esc(i.name || '—')}</td><td>${qty}</td><td>${kwd(price)}</td><td>${kwd(price * qty)}</td></tr>`;
+      }).join('')
+    : '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">لا أصناف</td></tr>';
+
+  const created = o.created_at ? new Date(o.created_at).toLocaleString('ar-KW') : '—';
+  const method = o.payment_method === 'cash' ? '💵 كاش عند الاستلام' : '💳 بطاقة';
+
+  document.getElementById('orderDetailsBody').innerHTML = `
+    <div class="od-section">
+      <div class="od-row"><span>رقم الطلب</span><strong>#${esc(o.order_ref || String(o.id))}</strong></div>
+      <div class="od-row"><span>الحالة</span><span>${ORDER_LABELS[o.status] || esc(o.status)}</span></div>
+      <div class="od-row"><span>التاريخ</span><span>${created}</span></div>
+      <div class="od-row"><span>طريقة الدفع</span><span>${method}</span></div>
+    </div>
+    <div class="od-section">
+      <h4>👤 العميل</h4>
+      <div class="od-row"><span>الاسم</span><span>${esc(o.customer_name || '—')}</span></div>
+      <div class="od-row"><span>الهاتف</span><span dir="ltr">${esc(o.customer_phone || '—')}</span></div>
+      <div class="od-row"><span>العنوان</span><span>${esc(o.address || '—')}</span></div>
+      ${o.notes ? `<div class="od-row"><span>ملاحظات</span><span>${esc(o.notes)}</span></div>` : ''}
+    </div>
+    <div class="od-section">
+      <h4>🛒 الأصناف</h4>
+      <table class="od-items">
+        <thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+        <tbody>${itemsRows}</tbody>
+      </table>
+    </div>
+    <div class="od-section">
+      ${o.delivery_fee > 0 ? `<div class="od-row"><span>🚚 رسوم التوصيل</span><span>${kwd(o.delivery_fee)}</span></div>` : ''}
+      ${o.discount_amount > 0 ? `<div class="od-row" style="color:#27ae60"><span>🎟️ خصم${o.discount_code ? ' ('+esc(o.discount_code)+')' : ''}</span><span>−${kwd(o.discount_amount)}</span></div>` : ''}
+      ${o.loyalty_discount > 0 ? `<div class="od-row" style="color:#27ae60"><span>🏆 نقاط الولاء (${o.loyalty_points_used || 0})</span><span>−${kwd(o.loyalty_discount)}</span></div>` : ''}
+      <div class="od-row od-total-row"><span>الإجمالي</span><span>${kwd(o.total)}</span></div>
+    </div>`;
+
+  const actions = statusButtonsHtml(o, false) + deleteButtonHtml(o, false);
+  document.getElementById('orderDetailsActions').innerHTML =
+    `<div class="order-status-btns" style="flex-wrap:wrap">${actions}</div>
+     <button class="btn btn-outline" onclick="closeOrderDetails()">إغلاق</button>`;
+
+  document.getElementById('orderOverlay').classList.add('open');
+}
+
+function closeOrderDetails() { document.getElementById('orderOverlay').classList.remove('open'); }
+
+async function deleteOrder(id) {
+  if (!can('orders_delete')) { showToast('🚫 لا تملك صلاحية حذف الطلبات', 'error'); return; }
+  if (!confirm('حذف هذا الطلب نهائياً؟ لا يمكن التراجع.')) return;
+  const { error } = await supabase.from('orders').delete().eq('id', id);
+  if (error) { showToast('❌ فشل الحذف: ' + error.message, 'error'); return; }
+  orders = orders.filter(o => o.id !== id);
+  closeOrderDetails();
+  renderOrders();
+  showToast('🗑️ تم حذف الطلب', 'success');
+}
+
 function switchSection(e, name) {
-  e.preventDefault();
+  if (e) e.preventDefault();
+  if (!sectionAllowed(name)) { showToast('🚫 لا تملك صلاحية لهذا القسم', 'error'); return; }
+  document.getElementById('sec-team').style.display = name === 'team' ? 'block' : 'none';
   document.getElementById('sec-products').style.display = name === 'products' ? 'block' : 'none';
   document.getElementById('sec-stats').style.display    = name === 'stats'    ? 'block' : 'none';
   document.getElementById('sec-orders').style.display   = name === 'orders'   ? 'block' : 'none';
@@ -1011,6 +1289,7 @@ function switchSection(e, name) {
   if (name === 'zones')      loadZonesAdmin();
   if (name === 'discounts')  loadDiscounts();
   if (name === 'loyalty')    loadLoyalty();
+  if (name === 'team')       loadTeam();
 }
 
 function populateCatOptions() {
@@ -1057,8 +1336,9 @@ function renderTable(list) {
       </td>
       <td>
         <div class="actions-cell">
-          <button class="btn btn-sm btn-outline" onclick="openModal(${p.id})">✏️ تعديل</button>
-          <button class="btn btn-sm btn-danger"  onclick="openDelete(${p.id})">🗑️</button>
+          ${can('products_edit') ? `<button class="btn btn-sm btn-outline" onclick="openModal(${p.id})">✏️ تعديل</button>` : ''}
+          ${can('products_delete') ? `<button class="btn btn-sm btn-danger"  onclick="openDelete(${p.id})">🗑️</button>` : ''}
+          ${(!can('products_edit') && !can('products_delete')) ? '<span style="color:var(--text-muted)">—</span>' : ''}
         </div>
       </td>
     </tr>`;
@@ -1079,6 +1359,7 @@ function filterTable() {
 }
 
 async function toggleAvail(id, current) {
+  if (!can('products_edit')) { showToast('🚫 لا تملك صلاحية تعديل المنتجات', 'error'); return; }
   const { error } = await supabase.from('products').update({ Available: !current }).eq('id', id);
   if (error) { showToast('فشل تحديث الحالة', 'error'); return; }
   products = products.map(p => p.id === id ? { ...p, Available: !current } : p);
@@ -1088,6 +1369,8 @@ async function toggleAvail(id, current) {
 }
 
 function openModal(id = null) {
+  if (id && !can('products_edit')) { showToast('🚫 لا تملك صلاحية تعديل المنتجات', 'error'); return; }
+  if (!id && !can('products_add')) { showToast('🚫 لا تملك صلاحية إضافة المنتجات', 'error'); return; }
   editingId    = id;
   uploadedFile = null;
   const preview = document.getElementById('imgPreview');
@@ -2098,6 +2381,8 @@ function mdToHtml(md) {
 }
 
 async function saveProduct() {
+  if (editingId && !can('products_edit')) { showToast('🚫 لا تملك صلاحية تعديل المنتجات', 'error'); return; }
+  if (!editingId && !can('products_add')) { showToast('🚫 لا تملك صلاحية إضافة المنتجات', 'error'); return; }
   const name  = document.getElementById('fName').value.trim();
   const catIds = [...document.querySelectorAll('#fCatList input:checked')].map(c => Number(c.value));
   const price = parseFloat(document.getElementById('fPrice').value);
@@ -2139,6 +2424,7 @@ async function saveProduct() {
 }
 
 function openDelete(id) {
+  if (!can('products_delete')) { showToast('🚫 لا تملك صلاحية حذف المنتجات', 'error'); return; }
   deletingId = id;
   const p = products.find(x => x.id === id);
   document.getElementById('deleteProductName').textContent = p ? p.Name : '';
@@ -2146,6 +2432,7 @@ function openDelete(id) {
 }
 function closeDelete() { document.getElementById('deleteOverlay').classList.remove('open'); }
 async function confirmDelete() {
+  if (!can('products_delete')) { showToast('🚫 لا تملك صلاحية حذف المنتجات', 'error'); return; }
   const { error } = await supabase.from('products').delete().eq('id', deletingId);
   if (error) { showToast('❌ فشل الحذف: ' + error.message, 'error'); return; }
   closeDelete();
@@ -2220,27 +2507,10 @@ function renderOrderCard(order) {
   const method    = order.payment_method === 'cash' ? '💵 كاش' : '💳 بطاقة';
   const timeAgo   = fmtTimeAgo(order.created_at);
 
-  let statusBtns = '';
-  if (order.status === 'new') {
-    statusBtns = `
-      <button class="status-btn status-btn-preparing" onclick="setStatus(${order.id},'preparing')">🔵 قيد التحضير</button>
-      <button class="status-btn status-btn-cancelled" onclick="setStatus(${order.id},'cancelled')">❌ إلغاء</button>`;
-  } else if (order.status === 'preparing') {
-    statusBtns = `
-      <button class="status-btn status-btn-delivering" onclick="setStatus(${order.id},'delivering')">🚚 خرج للتوصيل</button>
-      <button class="status-btn status-btn-cancelled"  onclick="setStatus(${order.id},'cancelled')">❌ إلغاء</button>`;
-  } else if (order.status === 'delivering') {
-    statusBtns = `
-      <button class="status-btn status-btn-completed" onclick="setStatus(${order.id},'completed')">✅ مكتمل</button>
-      <button class="status-btn status-btn-cancelled" onclick="setStatus(${order.id},'cancelled')">❌ إلغاء</button>`;
-  } else if (order.status === 'pending_payment') {
-    statusBtns = `
-      <button class="status-btn status-btn-new"       onclick="setStatus(${order.id},'new')">🟡 تأكيد كطلب جديد</button>
-      <button class="status-btn status-btn-cancelled" onclick="setStatus(${order.id},'cancelled')">❌ إلغاء</button>`;
-  }
+  const statusBtns = statusButtonsHtml(order, true) + deleteButtonHtml(order, true);
 
   return `
-  <div class="order-card status-${order.status}" id="order-${order.id}">
+  <div class="order-card clickable status-${order.status}" id="order-${order.id}" onclick="openOrderDetails(${order.id})">
     <div class="order-card-header">
       <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
         <span class="order-ref">#${esc(order.order_ref || String(order.id))}</span>
@@ -2266,9 +2536,11 @@ function renderOrderCard(order) {
 }
 
 async function setStatus(id, status) {
+  if (!can('orders_status')) { showToast('🚫 لا تملك صلاحية تغيير حالة الطلب', 'error'); return; }
   const { error } = await supabase.from('orders').update({ status }).eq('id', id);
   if (error) { showToast('❌ فشل تحديث الحالة', 'error'); return; }
   orders = orders.map(o => o.id === id ? { ...o, status } : o);
+  closeOrderDetails();
 
   /* منح نقاط الولاء عند اكتمال الطلب (مرة واحدة) */
   if (status === 'completed') {
@@ -2453,8 +2725,20 @@ async function changePassword(e) {
   if (!session) { window.location.replace('login.html'); return; }
   const emailEl = document.getElementById('adminEmail');
   if (emailEl) emailEl.textContent = session.user.email || '';
+
+  await loadMyPermissions(session.user.email);
+  applyPermissionsUI();
+
   document.body.classList.remove('auth-pending');
   initAdmin();
+
+  /* لو القسم الافتراضي (المنتجات) غير مسموح، انتقل لأول قسم مسموح */
+  if (!sectionAllowed('products')) {
+    const first = firstAllowedSection();
+    if (first) switchSection(null, first);
+    else document.querySelector('.admin-main').innerHTML =
+      '<div class="orders-empty">🚫 لا تملك أي صلاحيات بعد. تواصل مع المالك لتفعيلها.</div>';
+  }
 })();
 
 /* لو سجّل خروج من تبويب ثاني، رجّعه لصفحة الدخول */
