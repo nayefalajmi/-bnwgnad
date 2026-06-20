@@ -159,6 +159,14 @@
         </div>
         <p class="discount-msg" id="discountMsg"></p>
       </div>
+
+      <div class="form-group" id="loyaltyGroup" style="display:none">
+        <label>نقاط الولاء 🏆</label>
+        <div class="discount-row">
+          <button type="button" class="btn btn-outline" id="loyaltyBtn" onclick="checkLoyalty()">تحقّق من نقاطي</button>
+        </div>
+        <div class="discount-msg" id="loyaltyInfo"></div>
+      </div>
     </div>
 
     <!-- Order summary inside modal -->
@@ -206,7 +214,12 @@ function getIcon(name, cat) {
 let allProducts = [];
 let categories  = [];          // الفئات المرتّبة من جدول categories
 let deliveryZones = [];        // مناطق التوصيل ورسومها
-let appliedDiscount = null;    // { code, type, value, amount } عند تطبيق كود خصم
+let appliedDiscount = null;    // { code, type, value } عند تطبيق كود خصم
+let loyaltyEnabled  = false;   // النظام مفعّل (الكسب)
+let loyaltyShow     = false;   // إظهار النقاط للزبون
+let loyaltyRedeem   = false;   // السماح باستخدام النقاط كخصم
+let loyaltyBalance  = 0;       // رصيد نقاط الزبون بعد التحقق
+let useLoyalty      = false;   // هل اختار استخدام نقاطه؟
 let activeCat   = 'all';       // 'all' أو معرّف فئة (id)
 let searchTerm  = '';
 let cart = JSON.parse(localStorage.getItem('bnwgnad_cart') || '[]');
@@ -573,12 +586,21 @@ async function applyDiscount() {
   }
 }
 
-/* ملخّص الطلب داخل نموذج العنوان (منتجات + خصم + توصيل + الكلّي) */
+/* خصم نقاط الولاء على المتبقّي بعد كود الخصم (100 نقطة = 1 د.ك) */
+function computeLoyaltyDiscount(afterCodeTotal) {
+  if (!useLoyalty || !loyaltyEnabled || !loyaltyRedeem) return 0;
+  const fromPoints = Math.floor(loyaltyBalance / 100);     // د.ك متاحة من النقاط
+  return Math.max(0, Math.min(fromPoints, afterCodeTotal));
+}
+
+/* ملخّص الطلب (منتجات + كود خصم + نقاط ولاء + توصيل + الكلّي) */
 function renderCheckoutSummary() {
-  const products = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const fee      = selectedZoneFee();
-  const discount = computeDiscountAmount(products);
-  const grand    = products - discount + fee;
+  const products   = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const fee        = selectedZoneFee();
+  const codeDisc   = computeDiscountAmount(products);
+  const afterCode  = products - codeDisc;
+  const loyaltyDisc = computeLoyaltyDiscount(afterCode);
+  const grand      = afterCode - loyaltyDisc + fee;
   document.getElementById('addrSummary').innerHTML = `
     <div class="addr-summary-box">
       <p class="addr-summary-title">ملخص الطلب</p>
@@ -589,13 +611,67 @@ function renderCheckoutSummary() {
         </div>`
       ).join('')}
       <div class="addr-summary-row"><span>المنتجات</span><span>${products.toFixed(2)} د.ك</span></div>
-      ${discount > 0 ? `<div class="addr-summary-row" style="color:var(--success)"><span>الخصم (${appliedDiscount.code})</span><span>−${discount.toFixed(2)} د.ك</span></div>` : ''}
+      ${codeDisc > 0 ? `<div class="addr-summary-row" style="color:var(--success)"><span>الخصم (${appliedDiscount.code})</span><span>−${codeDisc.toFixed(2)} د.ك</span></div>` : ''}
+      ${loyaltyDisc > 0 ? `<div class="addr-summary-row" style="color:var(--success)"><span>🏆 نقاط الولاء (${Math.round(loyaltyDisc*100)} نقطة)</span><span>−${loyaltyDisc.toFixed(2)} د.ك</span></div>` : ''}
       <div class="addr-summary-row"><span>التوصيل</span><span>${fee.toFixed(2)} د.ك</span></div>
       <div class="addr-summary-total">
         <span>المجموع الكلي</span>
         <span>${grand.toFixed(2)} د.ك</span>
       </div>
     </div>`;
+}
+
+/* ─── الولاء ─── */
+async function loadLoyaltySetting() {
+  try {
+    const { data, error } = await supabase.from('app_settings').select('key,value')
+      .in('key', ['loyalty_enabled', 'loyalty_show', 'loyalty_redeem']);
+    const m = {}; (!error && Array.isArray(data) ? data : []).forEach(r => { m[r.key] = r.value; });
+    loyaltyEnabled = (m.loyalty_enabled || 'false') === 'true';
+    loyaltyShow    = (m.loyalty_show    || 'false') === 'true';
+    loyaltyRedeem  = (m.loyalty_redeem  || 'false') === 'true';
+  } catch (e) { loyaltyEnabled = loyaltyShow = loyaltyRedeem = false; }
+  const g = document.getElementById('loyaltyGroup');
+  if (g) g.style.display = (loyaltyEnabled && loyaltyShow) ? 'block' : 'none';
+}
+
+async function checkLoyalty() {
+  const phone = document.getElementById('aPhone').value.trim();
+  const info  = document.getElementById('loyaltyInfo');
+  if (!phone) { info.className = 'discount-msg err'; info.textContent = 'اكتب رقم هاتفك أولاً'; return; }
+  const btn = document.getElementById('loyaltyBtn');
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const { data, error } = await supabase.rpc('get_loyalty_points', { p_phone: phone });
+    loyaltyBalance = (!error && typeof data === 'number') ? data : 0;
+    const dinars = Math.floor(loyaltyBalance / 100);
+    if (!loyaltyRedeem) {
+      useLoyalty = false;
+      info.className = 'discount-msg';
+      info.innerHTML = `لديك <strong>${loyaltyBalance}</strong> نقطة (= ${dinars}.00 د.ك).`;
+    } else if (loyaltyBalance < 100) {
+      useLoyalty = false;
+      info.className = 'discount-msg';
+      info.innerHTML = `لديك <strong>${loyaltyBalance}</strong> نقطة. تحتاج 100 نقطة على الأقل للاستخدام.`;
+    } else {
+      info.className = 'discount-msg ok';
+      info.innerHTML = `لديك <strong>${loyaltyBalance}</strong> نقطة (= ${dinars}.00 د.ك). ` +
+        `<label style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer">` +
+        `<input type="checkbox" id="useLoyaltyChk" ${useLoyalty ? 'checked' : ''} onchange="toggleUseLoyalty()"/> استخدم نقاطي</label>`;
+    }
+  } catch (e) {
+    loyaltyBalance = 0; useLoyalty = false;
+    info.className = 'discount-msg err'; info.textContent = 'تعذّر جلب النقاط';
+  } finally {
+    btn.disabled = false; btn.textContent = 'تحقّق من نقاطي';
+    renderCheckoutSummary();
+  }
+}
+
+function toggleUseLoyalty() {
+  const chk = document.getElementById('useLoyaltyChk');
+  useLoyalty = !!(chk && chk.checked);
+  renderCheckoutSummary();
 }
 
 function startCheckout() {
@@ -605,6 +681,10 @@ function startCheckout() {
   appliedDiscount = null;
   const dInput = document.getElementById('aDiscount'); if (dInput) dInput.value = '';
   const dMsg = document.getElementById('discountMsg'); if (dMsg) dMsg.textContent = '';
+
+  /* إعادة ضبط الولاء */
+  loyaltyBalance = 0; useLoyalty = false;
+  const lInfo = document.getElementById('loyaltyInfo'); if (lInfo) lInfo.textContent = '';
 
   renderCheckoutSummary();
 
@@ -642,16 +722,22 @@ async function submitAddress() {
   const btn = document.getElementById('payBtn');
   btn.disabled = true;
 
-  const products = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const fee      = selectedZoneFee();
-  const discount = computeDiscountAmount(products);
-  const total    = products - discount + fee;
-  const orderRef = 'ORD-' + Date.now();
-  const address  = `${area}، ${street}، ${building}${flat ? ' ش'+flat : ''}`;
+  const products    = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const fee         = selectedZoneFee();
+  const discount    = computeDiscountAmount(products);          // كود الخصم
+  const afterCode   = products - discount;
+  const loyaltyDisc = computeLoyaltyDiscount(afterCode);        // نقاط الولاء
+  const pointsUsed  = Math.round(loyaltyDisc * 100);
+  const total       = afterCode - loyaltyDisc + fee;
+  const orderRef    = 'ORD-' + Date.now();
+  const address     = `${area}، ${street}، ${building}${flat ? ' ش'+flat : ''}`;
 
-  /* استهلاك كود الخصم (ذرّياً عبر RPC) */
+  /* استهلاك كود الخصم ونقاط الولاء (ذرّياً عبر RPC) */
   if (appliedDiscount && discount > 0) {
     try { await supabase.rpc('redeem_discount', { p_code: appliedDiscount.code }); } catch (e) {}
+  }
+  if (useLoyalty && pointsUsed > 0) {
+    try { await supabase.rpc('redeem_loyalty', { p_phone: phone, p_points: pointsUsed }); } catch (e) {}
   }
 
   /* ── كاش: أكّد الطلب مباشرة ── */
@@ -669,6 +755,8 @@ async function submitAddress() {
         delivery_fee:   parseFloat(fee.toFixed(3)),
         discount_code:   appliedDiscount && discount > 0 ? appliedDiscount.code : null,
         discount_amount: parseFloat(discount.toFixed(3)),
+        loyalty_points_used: pointsUsed,
+        loyalty_discount:    parseFloat(loyaltyDisc.toFixed(3)),
         payment_method: 'cash',
         status:         'new'
       }]);
@@ -691,6 +779,8 @@ async function submitAddress() {
         deliveryFee: parseFloat(fee.toFixed(3)),
         discountCode:   appliedDiscount && discount > 0 ? appliedDiscount.code : null,
         discountAmount: parseFloat(discount.toFixed(3)),
+        loyaltyPointsUsed: pointsUsed,
+        loyaltyDiscount:   parseFloat(loyaltyDisc.toFixed(3)),
         orderRef,
         items:    cart.map(i => ({ id: i.id, name: i.variant ? i.name + ' - ' + i.variant : i.name, variant: i.variant || null, price: i.price, qty: i.qty })),
         customer: { name, phone, address, notes: notes || '' },
@@ -751,6 +841,7 @@ updateCartCount();
 loadProducts();
 loadHeroBanner();
 loadDeliveryZones();
+loadLoyaltySetting();
 </script>
 </body>
 </html>
