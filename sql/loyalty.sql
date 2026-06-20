@@ -86,6 +86,12 @@ begin
     do update set points = loyalty_points.points + excluded.points, updated_at = now();
 end; $$;
 
+-- مهم: Postgres يمنح EXECUTE لـ PUBLIC تلقائياً للدوال الجديدة.
+-- نلغيه أولاً ثم نمنح الأدوار المطلوبة صراحةً — وإلا يقدر الزائر يستدعي award_loyalty ويمنح نفسه نقاطاً.
+revoke execute on function get_loyalty_points(text)  from public;
+revoke execute on function redeem_loyalty(text, int) from public;
+revoke execute on function award_loyalty(text, int)  from public;
+
 grant execute on function get_loyalty_points(text)     to anon, authenticated;
 grant execute on function redeem_loyalty(text, int)     to anon, authenticated;
-grant execute on function award_loyalty(text, int)      to authenticated;
+grant execute on function award_loyalty(text, int)      to authenticated;   -- الأدمن فقط
