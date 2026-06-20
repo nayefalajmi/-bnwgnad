@@ -195,16 +195,26 @@ function getIcon(name, cat) {
 
 /* ─── State ─── */
 let allProducts = [];
-let activeCat   = 'all';
+let categories  = [];          // الفئات المرتّبة من جدول categories
+let activeCat   = 'all';       // 'all' أو معرّف فئة (id)
 let searchTerm  = '';
 let cart = JSON.parse(localStorage.getItem('bnwgnad_cart') || '[]');
+
+/* هل منتج ينتمي للفئة المفعّلة؟ (يدعم الـ ids والاسم للتوافق) */
+function productInActiveCat(p) {
+  if (activeCat === 'all') return true;
+  /* وضع التوافق: لا جدول فئات → activeCat هو اسم الفئة */
+  if (!categories.length) return p.Category === activeCat;
+  const ids = (p.category_ids || []).map(Number);
+  if (ids.includes(Number(activeCat))) return true;
+  const cat = categories.find(c => String(c.id) === String(activeCat));
+  return !!(cat && p.Category === cat.name);   // توافق مع البيانات القديمة
+}
 
 /* فلترة مباشرة حسب الفئة + نص البحث */
 function applyFilters() {
   const q = searchTerm.trim().toLowerCase();
-  let list = activeCat === 'all'
-    ? allProducts
-    : allProducts.filter(p => p.Category === activeCat);
+  let list = allProducts.filter(productInActiveCat);
   if (q) list = list.filter(p => (p.Name || '').toLowerCase().includes(q));
   renderProducts(list);
 }
@@ -218,7 +228,17 @@ function onSearchInput(value) {
 /* ════════════════════════════
    PRODUCTS
 ════════════════════════════ */
+/* تحميل الفئات المرتّبة (مع تجاهل صامت لو الجدول غير موجود بعد) */
+async function loadCategories() {
+  try {
+    const { data, error } = await supabase
+      .from('categories').select('*').order('sort_order', { ascending: true });
+    categories = (!error && Array.isArray(data)) ? data : [];
+  } catch (e) { categories = []; }
+}
+
 async function loadProducts() {
+  await loadCategories();
   const { data, error } = await supabase
     .from('products').select('*').eq('Available', true).order('Name');
   const grid = document.getElementById('productsGrid');
@@ -227,15 +247,22 @@ async function loadProducts() {
     return;
   }
   allProducts = data;
-  buildFilters(data);
+  buildFilters();
   applyFilters();
 }
 
-function buildFilters(data) {
+function buildFilters() {
   const el = document.getElementById('filters');
-  const cats = ['all', ...new Set(data.map(p => p.Category).filter(Boolean))];
+  /* الفئات من الجدول بترتيبها؛ وإلا توافق: مشتقّة من المنتجات */
+  let cats;
+  if (categories.length) {
+    cats = [{ id: 'all', name: 'الكل' }, ...categories.map(c => ({ id: String(c.id), name: c.name }))];
+  } else {
+    const names = [...new Set(allProducts.map(p => p.Category).filter(Boolean))];
+    cats = [{ id: 'all', name: 'الكل' }, ...names.map(n => ({ id: n, name: n }))];
+  }
   el.innerHTML = cats.map(c =>
-    `<button class="filter-btn ${c==='all'?'active':''}" data-cat="${c}">${c==='all'?'الكل':c}</button>`
+    `<button class="filter-btn ${c.id === activeCat ? 'active' : ''}" data-cat="${c.id}">${c.name}</button>`
   ).join('');
   el.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {

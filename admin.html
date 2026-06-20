@@ -172,6 +172,42 @@
     /* إخفاء المحتوى حتى يتم التحقق من جلسة الدخول */
     body.auth-pending { visibility: hidden; }
 
+    /* ── Categories ── */
+    .cat-add-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+    .cat-add-row input {
+      flex: 1; min-width: 200px; padding: .6rem .9rem;
+      border: 1.5px solid var(--border); border-radius: 10px; font-family: inherit; font-size: .92rem;
+    }
+    .cat-add-row input:focus { outline: none; border-color: var(--accent); }
+    .cat-manage-list { display: flex; flex-direction: column; gap: .5rem; max-width: 640px; }
+    .cat-item {
+      display: flex; align-items: center; gap: .75rem;
+      background: #fff; border: 1.5px solid var(--border); border-radius: 10px; padding: .6rem .9rem;
+    }
+    .cat-item.dragging { opacity: .5; border-color: var(--accent); }
+    .cat-drag { cursor: grab; color: var(--text-muted); font-size: 1.1rem; user-select: none; }
+    .cat-name { flex: 1; font-weight: 600; font-size: .92rem; }
+    .cat-actions { display: flex; gap: .4rem; }
+
+    /* قائمة فئات المنتج (checkboxes) */
+    .cat-checklist {
+      display: flex; flex-wrap: wrap; gap: .5rem;
+      max-height: 160px; overflow-y: auto;
+      border: 1.5px solid var(--border); border-radius: 10px; padding: .6rem;
+    }
+    .cat-check {
+      display: inline-flex; align-items: center; gap: .35rem;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 2rem;
+      padding: .3rem .7rem; font-size: .85rem; cursor: pointer;
+    }
+    .cat-check input { cursor: pointer; }
+
+    /* شارة فئة في جدول المنتجات */
+    .tbl-cat {
+      display: inline-block; background: var(--bg); padding: .12rem .5rem;
+      border-radius: 1rem; font-size: .75rem; margin: 1px;
+    }
+
     /* ── Smart Accountant ── */
     .acc-controls { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; }
     .acc-period { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
@@ -241,6 +277,7 @@
   <aside class="admin-sidebar">
     <div class="sidebar-title">القائمة</div>
     <a href="#" data-section="products" class="active" onclick="switchSection(event,'products')">📦 المنتجات</a>
+    <a href="#" data-section="categories" onclick="switchSection(event,'categories')">🏷️ الفئات</a>
     <a href="#" data-section="orders" onclick="switchSection(event,'orders')" style="display:flex;align-items:center">
       📋 الطلبات
       <span class="sidebar-badge" id="ordersBadge" style="display:none">0</span>
@@ -431,6 +468,26 @@
       <div id="accReport" style="margin-top:1.25rem"></div>
     </div>
 
+    <!-- ── Categories ── -->
+    <div id="sec-categories" style="display:none">
+      <div class="admin-header">
+        <h2>🏷️ إدارة الفئات</h2>
+      </div>
+      <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1rem">
+        أضف فئات وعدّل أسماءها واسحبها لإعادة ترتيبها — يظهر الترتيب نفسه في المتجر.
+        كل منتج يقدر ينتمي لفئة واحدة أو أكثر (من نافذة تعديل المنتج).
+      </p>
+
+      <div class="cat-add-row">
+        <input type="text" id="newCatName" placeholder="اسم الفئة الجديدة…" onkeydown="if(event.key==='Enter')addCategory()" />
+        <button class="btn btn-accent" onclick="addCategory()">➕ إضافة فئة</button>
+      </div>
+
+      <div id="catList" class="cat-manage-list" style="margin-top:1rem">
+        <div class="orders-empty"><div class="spinner" style="margin:0 auto 1rem"></div><p>جاري التحميل…</p></div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -439,16 +496,14 @@
   <div class="modal">
     <h3 class="modal-title" id="modalTitle">➕ إضافة منتج جديد</h3>
 
-    <div class="form-row">
-      <div class="form-group">
-        <label>اسم المنتج *</label>
-        <input type="text" id="fName" placeholder="مثال: قهوة سعودية" />
-      </div>
-      <div class="form-group">
-        <label>الفئة *</label>
-        <input type="text" id="fCategory" placeholder="قهوة، شاي، أخرى…" list="catsDL" />
-        <datalist id="catsDL"></datalist>
-      </div>
+    <div class="form-group">
+      <label>اسم المنتج *</label>
+      <input type="text" id="fName" placeholder="مثال: قهوة سعودية" />
+    </div>
+
+    <div class="form-group">
+      <label>الفئات (اختر فئة أو أكثر) *</label>
+      <div id="fCatList" class="cat-checklist"></div>
     </div>
 
     <div class="form-row">
@@ -517,11 +572,23 @@
    PRODUCTS
 ════════════════════════════════════════ */
 let products   = [];
+let categoriesList = [];        // الفئات المرتّبة من جدول categories
 let editingId  = null;
 let deletingId = null;
 let uploadedFile = null;
 
+/* جلب الفئات (مع تجاهل صامت لو الجدول غير موجود بعد) */
+async function fetchCategories() {
+  try {
+    const { data, error } = await supabase
+      .from('categories').select('*').order('sort_order', { ascending: true });
+    categoriesList = (!error && Array.isArray(data)) ? data : [];
+  } catch (e) { categoriesList = []; }
+  return categoriesList;
+}
+
 async function loadProducts() {
+  await fetchCategories();
   const { data, error } = await supabase.from('products').select('*').order('id');
   if (error) { showToast('خطأ في تحميل البيانات', 'error'); return; }
   products = data;
@@ -530,9 +597,32 @@ async function loadProducts() {
   populateCatOptions();
 }
 
+/* أسماء فئات منتج (من category_ids، مع توافق Category القديم) */
+function catNamesForProduct(p) {
+  if (categoriesList.length && Array.isArray(p.category_ids) && p.category_ids.length) {
+    const names = p.category_ids
+      .map(id => (categoriesList.find(c => c.id === id) || {}).name)
+      .filter(Boolean);
+    if (names.length) return names;
+  }
+  return p.Category ? [p.Category] : [];
+}
+
+/* هل منتج يطابق فئة (بالـ id أو الاسم) */
+function productMatchesCat(p, catVal) {
+  if (!catVal) return true;
+  if (categoriesList.length) {
+    const ids = (p.category_ids || []).map(Number);
+    if (ids.includes(Number(catVal))) return true;
+    const c = categoriesList.find(x => String(x.id) === String(catVal));
+    return !!(c && p.Category === c.name);
+  }
+  return p.Category === catVal;
+}
+
 function updateStats() {
   const on   = products.filter(p => p.Available).length;
-  const cats = new Set(products.map(p => p.Category)).size;
+  const cats = categoriesList.length || new Set(products.map(p => p.Category).filter(Boolean)).size;
   document.getElementById('stTotal').textContent = products.length;
   document.getElementById('stOn').textContent    = on;
   document.getElementById('stOff').textContent   = products.length - on;
@@ -703,21 +793,26 @@ function switchSection(e, name) {
   document.getElementById('sec-orders').style.display   = name === 'orders'   ? 'block' : 'none';
   document.getElementById('sec-banner').style.display   = name === 'banner'   ? 'block' : 'none';
   document.getElementById('sec-accountant').style.display = name === 'accountant' ? 'block' : 'none';
+  document.getElementById('sec-categories').style.display = name === 'categories' ? 'block' : 'none';
   document.querySelectorAll('.admin-sidebar a[data-section]').forEach(a =>
     a.classList.toggle('active', a.dataset.section === name));
   if (name === 'orders')     loadOrders();
   if (name === 'stats')      loadFullStats();
   if (name === 'banner')     loadBannerPreview();
   if (name === 'accountant') renderSavedReports();
+  if (name === 'categories') loadCategoriesAdmin();
 }
 
 function populateCatOptions() {
-  const cats = [...new Set(products.map(p => p.Category).filter(Boolean))].sort();
   const sel = document.getElementById('filterCat');
-  sel.innerHTML = '<option value="">كل الفئات</option>' +
-    cats.map(c => `<option value="${c}">${c}</option>`).join('');
-  document.getElementById('catsDL').innerHTML =
-    cats.map(c => `<option value="${c}">`).join('');
+  if (categoriesList.length) {
+    sel.innerHTML = '<option value="">كل الفئات</option>' +
+      categoriesList.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  } else {
+    const cats = [...new Set(products.map(p => p.Category).filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">كل الفئات</option>' +
+      cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
 }
 
 function renderTable(list) {
@@ -737,7 +832,9 @@ function renderTable(list) {
       <td style="color:var(--text-muted);font-size:.78rem">${p.id}</td>
       <td>${thumb}</td>
       <td><strong>${p.Name}</strong></td>
-      <td><span style="background:var(--bg);padding:.18rem .55rem;border-radius:1rem;font-size:.8rem">${p.Category||'—'}</span></td>
+      <td>${(() => { const ns = catNamesForProduct(p); return ns.length
+        ? ns.map(n => `<span class="tbl-cat">${esc(n)}</span>`).join(' ')
+        : '<span style="color:var(--text-muted)">—</span>'; })()}</td>
       <td style="font-weight:700;color:var(--accent)">${price} د.ك</td>
       <td>
         <div class="toggle-wrap">
@@ -764,7 +861,7 @@ function filterTable() {
   const avail = document.getElementById('filterAvail').value;
   const filtered = products.filter(p => {
     const mQ = !q || p.Name.toLowerCase().includes(q) || (p.Description||'').toLowerCase().includes(q);
-    const mC = !cat   || p.Category === cat;
+    const mC = productMatchesCat(p, cat);
     const mA = avail === '' || String(p.Available) === avail;
     return mQ && mC && mA;
   });
@@ -792,11 +889,17 @@ function openModal(id = null) {
   if (id) {
     const p = products.find(x => x.id === id);
     document.getElementById('fName').value     = p.Name;
-    document.getElementById('fCategory').value = p.Category || '';
     document.getElementById('fPrice').value    = p.Price;
     document.getElementById('fDesc').value     = p.Description || '';
     document.getElementById('fAvail').checked  = p.Available;
     document.getElementById('fImageUrl').value = p.image_url || '';
+    /* الفئات المحدّدة: من category_ids، وإلا من اسم الفئة القديم */
+    let selIds = Array.isArray(p.category_ids) ? p.category_ids.slice() : [];
+    if (!selIds.length && p.Category) {
+      const c = categoriesList.find(x => x.name === p.Category);
+      if (c) selIds = [c.id];
+    }
+    renderCatChecklist(selIds);
     if (p.image_url) {
       preview.src = p.image_url;
       preview.style.display = 'block';
@@ -804,13 +907,26 @@ function openModal(id = null) {
     }
   } else {
     document.getElementById('fName').value     = '';
-    document.getElementById('fCategory').value = '';
     document.getElementById('fPrice').value    = '';
     document.getElementById('fDesc').value     = '';
     document.getElementById('fAvail').checked  = true;
     document.getElementById('fImageUrl').value = '';
+    renderCatChecklist([]);
   }
   document.getElementById('modalOverlay').classList.add('open');
+}
+
+/* قائمة فئات قابلة للاختيار المتعدد داخل نافذة المنتج */
+function renderCatChecklist(selectedIds) {
+  const el = document.getElementById('fCatList');
+  const sel = new Set((selectedIds || []).map(Number));
+  if (!categoriesList.length) {
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:.85rem;margin:0">لا توجد فئات بعد — أضِفها من قسم "🏷️ الفئات" (وتأكد أنك شغّلت sql/categories.sql).</p>';
+    return;
+  }
+  el.innerHTML = categoriesList.map(c =>
+    `<label class="cat-check"><input type="checkbox" value="${c.id}" ${sel.has(c.id) ? 'checked' : ''}/> ${esc(c.name)}</label>`
+  ).join('');
 }
 function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
 
@@ -848,6 +964,100 @@ async function uploadImage(file) {
   if (error) throw new Error('فشل رفع الصورة: ' + error.message);
   const { data } = supabase.storage.from('product-images').getPublicUrl(path);
   return data.publicUrl;
+}
+
+/* ════════════════════════════════════════
+   CATEGORIES (إدارة الفئات)
+════════════════════════════════════════ */
+async function loadCategoriesAdmin() {
+  await fetchCategories();
+  renderCatManage();
+  populateCatOptions();   // أبقِ فلتر المنتجات متزامناً
+}
+
+function renderCatManage() {
+  const el = document.getElementById('catList');
+  if (!categoriesList.length) {
+    el.innerHTML = '<div class="orders-empty">لا توجد فئات بعد. أضف فئة من الأعلى — وتأكد أنك شغّلت <code>sql/categories.sql</code> في Supabase.</div>';
+    return;
+  }
+  el.innerHTML = categoriesList.map(c => `
+    <div class="cat-item" draggable="true" data-id="${c.id}">
+      <span class="cat-drag" title="اسحب لإعادة الترتيب">⠿</span>
+      <span class="cat-name">${esc(c.name)}</span>
+      <div class="cat-actions">
+        <button class="btn btn-sm btn-outline" onclick="renameCategory(${c.id})">✏️ تعديل</button>
+        <button class="btn btn-sm btn-danger"  onclick="deleteCategory(${c.id})">🗑️</button>
+      </div>
+    </div>`).join('');
+  enableCatDrag();
+}
+
+/* ── السحب والإفلات لإعادة الترتيب ── */
+function enableCatDrag() {
+  document.querySelectorAll('#catList .cat-item').forEach(it => {
+    it.addEventListener('dragstart', () => it.classList.add('dragging'));
+    it.addEventListener('dragend',   () => { it.classList.remove('dragging'); persistCatOrder(); });
+    it.addEventListener('dragover', e => {
+      e.preventDefault();
+      const dragging = document.querySelector('#catList .cat-item.dragging');
+      if (!dragging || dragging === it) return;
+      const rect  = it.getBoundingClientRect();
+      const after = (e.clientY - rect.top) > rect.height / 2;
+      it.parentNode.insertBefore(dragging, after ? it.nextSibling : it);
+    });
+  });
+}
+
+async function persistCatOrder() {
+  const ids = [...document.querySelectorAll('#catList .cat-item')].map(el => Number(el.dataset.id));
+  /* أعد ترتيب القائمة محلياً */
+  categoriesList = ids.map(id => categoriesList.find(c => c.id === id)).filter(Boolean);
+  /* احفظ sort_order الجديد */
+  try {
+    for (let i = 0; i < ids.length; i++) {
+      await supabase.from('categories').update({ sort_order: i }).eq('id', ids[i]);
+    }
+    populateCatOptions();
+    showToast('✅ تم حفظ الترتيب', 'success');
+  } catch (e) {
+    showToast('❌ تعذّر حفظ الترتيب', 'error');
+  }
+}
+
+async function addCategory() {
+  const inp  = document.getElementById('newCatName');
+  const name = inp.value.trim();
+  if (!name) { showToast('⚠️ اكتب اسم الفئة', 'error'); return; }
+  const sort = categoriesList.length ? Math.max(...categoriesList.map(c => c.sort_order || 0)) + 1 : 0;
+  const { error } = await supabase.from('categories').insert([{ name, sort_order: sort }]);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  inp.value = '';
+  await loadCategoriesAdmin();
+  showToast('✅ تمت إضافة الفئة', 'success');
+}
+
+async function renameCategory(id) {
+  const cat = categoriesList.find(c => c.id === id);
+  if (!cat) return;
+  const name = prompt('اسم الفئة الجديد:', cat.name);
+  if (name === null) return;
+  const t = name.trim();
+  if (!t) { showToast('⚠️ الاسم فارغ', 'error'); return; }
+  const { error } = await supabase.from('categories').update({ name: t }).eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  await loadCategoriesAdmin();
+  showToast('✅ تم تعديل الاسم', 'success');
+}
+
+async function deleteCategory(id) {
+  const cat = categoriesList.find(c => c.id === id);
+  if (!cat) return;
+  if (!confirm(`حذف الفئة "${cat.name}"؟ لن تظهر بعدها كفلتر في المتجر.`)) return;
+  const { error } = await supabase.from('categories').delete().eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  await loadCategoriesAdmin();
+  showToast('🗑️ تم حذف الفئة', 'success');
 }
 
 /* ════════════════════════════════════════
@@ -1146,13 +1356,14 @@ function mdToHtml(md) {
 
 async function saveProduct() {
   const name  = document.getElementById('fName').value.trim();
-  const cat   = document.getElementById('fCategory').value.trim();
+  const catIds = [...document.querySelectorAll('#fCatList input:checked')].map(c => Number(c.value));
   const price = parseFloat(document.getElementById('fPrice').value);
   const desc  = document.getElementById('fDesc').value.trim();
   const avail = document.getElementById('fAvail').checked;
-  if (!name || !cat || isNaN(price) || price < 0) {
-    showToast('⚠️ يرجى ملء الاسم والفئة والسعر بشكل صحيح', 'error'); return;
+  if (!name || !catIds.length || isNaN(price) || price < 0) {
+    showToast('⚠️ يرجى ملء الاسم واختيار فئة واحدة على الأقل والسعر', 'error'); return;
   }
+  const firstCatName = (categoriesList.find(c => c.id === catIds[0]) || {}).name || '';
   const saveBtn = document.querySelector('#modalOverlay .btn-accent');
   saveBtn.textContent = '⏳ جاري الحفظ…';
   saveBtn.disabled = true;
@@ -1160,7 +1371,8 @@ async function saveProduct() {
     let imageUrl = document.getElementById('fImageUrl').value.trim() || null;
     if (uploadedFile) imageUrl = await uploadImage(uploadedFile);
     const payload = {
-      Name: name, Category: cat, Price: price, Description: desc || null, Available: avail,
+      Name: name, Category: firstCatName, category_ids: catIds,
+      Price: price, Description: desc || null, Available: avail,
       ...(imageUrl !== undefined ? { image_url: imageUrl } : {})
     };
     let error;
