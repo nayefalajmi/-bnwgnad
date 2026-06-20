@@ -226,6 +226,29 @@
     .zone-item .zone-fee  { width: 90px; padding: .45rem .5rem; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: .9rem; }
     .zone-item input:focus { outline: none; border-color: var(--accent); }
 
+    /* أكواد الخصم */
+    .disc-add { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+    .disc-add input, .disc-add select {
+      padding: .55rem .7rem; border: 1.5px solid var(--border); border-radius: 10px;
+      font-family: inherit; font-size: .88rem;
+    }
+    .disc-add input[type=text] { flex: 1; min-width: 160px; }
+    .disc-add input:focus, .disc-add select:focus { outline: none; border-color: var(--accent); }
+    .disc-list { display: flex; flex-direction: column; gap: .6rem; }
+    .disc-item {
+      display: flex; flex-wrap: wrap; align-items: center; gap: .6rem;
+      background: #fff; border: 1.5px solid var(--border); border-radius: 12px; padding: .7rem .9rem;
+    }
+    .disc-item.off { opacity: .55; }
+    .disc-code { font-weight: 700; color: var(--primary); font-size: .95rem; min-width: 90px; }
+    .disc-fields { display: flex; gap: .4rem; flex-wrap: wrap; }
+    .disc-fields select, .disc-fields input {
+      padding: .4rem .5rem; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: .82rem;
+    }
+    .disc-fields .d-value, .disc-fields .d-max { width: 80px; }
+    .disc-uses { font-size: .82rem; color: var(--text-muted); margin-right: auto; }
+    .disc-actions { display: flex; gap: .35rem; }
+
     /* محرّر المتغيرات */
     .var-editor { display: flex; flex-direction: column; gap: .45rem; }
     .var-row { display: flex; gap: .45rem; align-items: center; }
@@ -313,6 +336,7 @@
     <a href="#" data-section="products" class="active" onclick="switchSection(event,'products')">📦 المنتجات</a>
     <a href="#" data-section="categories" onclick="switchSection(event,'categories')">🏷️ الفئات</a>
     <a href="#" data-section="zones" onclick="switchSection(event,'zones')">🚚 رسوم التوصيل</a>
+    <a href="#" data-section="discounts" onclick="switchSection(event,'discounts')">🎟️ أكواد الخصم</a>
     <a href="#" data-section="orders" onclick="switchSection(event,'orders')" style="display:flex;align-items:center">
       📋 الطلبات
       <span class="sidebar-badge" id="ordersBadge" style="display:none">0</span>
@@ -539,6 +563,32 @@
       </div>
 
       <div id="zoneList" class="zone-list" style="margin-top:1rem">
+        <div class="orders-empty"><div class="spinner" style="margin:0 auto 1rem"></div><p>جاري التحميل…</p></div>
+      </div>
+    </div>
+
+    <!-- ── Discount Codes ── -->
+    <div id="sec-discounts" style="display:none">
+      <div class="admin-header">
+        <h2>🎟️ أكواد الخصم</h2>
+      </div>
+      <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1rem">
+        أنشئ أكواد خصم (نسبة % أو مبلغ ثابت)، حدّد تاريخ انتهاء وحدّاً أقصى للاستخدامات. يطبّقها العميل عند الطلب.
+      </p>
+
+      <div class="disc-add">
+        <input type="text"   id="newDiscCode"  placeholder="الكود (مثل WELCOME10)" />
+        <select id="newDiscType">
+          <option value="percent">نسبة %</option>
+          <option value="fixed">مبلغ ثابت د.ك</option>
+        </select>
+        <input type="number" id="newDiscValue" placeholder="القيمة" min="0" step="0.001" />
+        <input type="date"   id="newDiscExp"   title="تاريخ الانتهاء (اختياري)" />
+        <input type="number" id="newDiscMax"   placeholder="حد الاستخدام" min="1" step="1" title="الحد الأقصى للاستخدامات (اختياري)" />
+        <button class="btn btn-accent" onclick="addDiscount()">➕ إضافة كود</button>
+      </div>
+
+      <div id="discList" class="disc-list" style="margin-top:1rem">
         <div class="orders-empty"><div class="spinner" style="margin:0 auto 1rem"></div><p>جاري التحميل…</p></div>
       </div>
     </div>
@@ -861,6 +911,7 @@ function switchSection(e, name) {
   document.getElementById('sec-accountant').style.display = name === 'accountant' ? 'block' : 'none';
   document.getElementById('sec-categories').style.display = name === 'categories' ? 'block' : 'none';
   document.getElementById('sec-zones').style.display      = name === 'zones'      ? 'block' : 'none';
+  document.getElementById('sec-discounts').style.display  = name === 'discounts'  ? 'block' : 'none';
   document.querySelectorAll('.admin-sidebar a[data-section]').forEach(a =>
     a.classList.toggle('active', a.dataset.section === name));
   if (name === 'orders')     loadOrders();
@@ -869,6 +920,7 @@ function switchSection(e, name) {
   if (name === 'accountant') renderSavedReports();
   if (name === 'categories') loadCategoriesAdmin();
   if (name === 'zones')      loadZonesAdmin();
+  if (name === 'discounts')  loadDiscounts();
 }
 
 function populateCatOptions() {
@@ -1220,6 +1272,107 @@ async function deleteZone(id) {
   if (error) { showToast('❌ ' + error.message, 'error'); return; }
   await loadZonesAdmin();
   showToast('🗑️ تم حذف المنطقة', 'success');
+}
+
+/* ════════════════════════════════════════
+   DISCOUNT CODES (أكواد الخصم)
+════════════════════════════════════════ */
+let discountsList = [];
+
+async function loadDiscounts() {
+  const el = document.getElementById('discList');
+  const { data, error } = await supabase
+    .from('discount_codes').select('*').order('created_at', { ascending: false });
+  if (error) {
+    el.innerHTML = '<div class="orders-empty">تعذّر التحميل. تأكد أنك شغّلت <code>sql/discount-codes.sql</code> في Supabase.</div>';
+    return;
+  }
+  discountsList = data || [];
+  if (!discountsList.length) {
+    el.innerHTML = '<div class="orders-empty">لا توجد أكواد بعد. أضف كوداً من الأعلى.</div>';
+    return;
+  }
+  el.innerHTML = discountsList.map(d => {
+    const expVal = d.expires_at ? new Date(d.expires_at).toISOString().slice(0, 10) : '';
+    return `
+    <div class="disc-item ${d.active ? '' : 'off'}" data-id="${d.id}">
+      <div class="disc-code">${esc(d.code)}</div>
+      <div class="disc-fields">
+        <select class="d-type">
+          <option value="percent" ${d.discount_type === 'percent' ? 'selected' : ''}>نسبة %</option>
+          <option value="fixed"   ${d.discount_type === 'fixed'   ? 'selected' : ''}>مبلغ د.ك</option>
+        </select>
+        <input type="number" class="d-value" value="${d.discount_value}" min="0" step="0.001" title="القيمة" />
+        <input type="date"   class="d-exp"   value="${expVal}" title="الانتهاء" />
+        <input type="number" class="d-max"   value="${d.max_uses ?? ''}" min="1" step="1" placeholder="∞" title="حد الاستخدام" />
+      </div>
+      <div class="disc-uses">الاستخدام: ${d.used_count}${d.max_uses ? ' / ' + d.max_uses : ''}</div>
+      <div class="disc-actions">
+        <button class="btn btn-sm ${d.active ? 'btn-outline' : 'btn-accent'}" onclick="toggleDiscount(${d.id})">${d.active ? '⏸ تعطيل' : '▶ تفعيل'}</button>
+        <button class="btn btn-sm btn-accent" onclick="saveDiscount(${d.id})">💾</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteDiscount(${d.id})">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function expToISO(dateStr) {
+  return dateStr ? new Date(dateStr + 'T23:59:59').toISOString() : null;   // صالح حتى نهاية اليوم
+}
+
+async function addDiscount() {
+  const code  = document.getElementById('newDiscCode').value.trim();
+  const type  = document.getElementById('newDiscType').value;
+  const value = parseFloat(document.getElementById('newDiscValue').value);
+  const exp   = document.getElementById('newDiscExp').value;
+  const maxIn = document.getElementById('newDiscMax').value;
+  if (!code || isNaN(value) || value <= 0) { showToast('⚠️ اكتب الكود والقيمة', 'error'); return; }
+  const { error } = await supabase.from('discount_codes').insert([{
+    code, discount_type: type, discount_value: value,
+    expires_at: expToISO(exp),
+    max_uses: maxIn ? parseInt(maxIn) : null,
+    active: true,
+  }]);
+  if (error) { showToast('❌ ' + (error.message.includes('duplicate') ? 'الكود موجود مسبقاً' : error.message), 'error'); return; }
+  ['newDiscCode','newDiscValue','newDiscExp','newDiscMax'].forEach(id => document.getElementById(id).value = '');
+  await loadDiscounts();
+  showToast('✅ تمت إضافة الكود', 'success');
+}
+
+async function saveDiscount(id) {
+  const row = document.querySelector(`.disc-item[data-id="${id}"]`);
+  const type  = row.querySelector('.d-type').value;
+  const value = parseFloat(row.querySelector('.d-value').value);
+  const exp   = row.querySelector('.d-exp').value;
+  const maxIn = row.querySelector('.d-max').value;
+  if (isNaN(value) || value <= 0) { showToast('⚠️ قيمة غير صحيحة', 'error'); return; }
+  const { error } = await supabase.from('discount_codes').update({
+    discount_type: type, discount_value: value,
+    expires_at: expToISO(exp),
+    max_uses: maxIn ? parseInt(maxIn) : null,
+  }).eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  await loadDiscounts();
+  showToast('✅ تم الحفظ', 'success');
+}
+
+async function toggleDiscount(id) {
+  const d = discountsList.find(x => x.id === id);
+  if (!d) return;
+  const { error } = await supabase.from('discount_codes').update({ active: !d.active }).eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  await loadDiscounts();
+  showToast(!d.active ? '✅ تم تفعيل الكود' : '⏸ تم تعطيل الكود', 'success');
+}
+
+async function deleteDiscount(id) {
+  const d = discountsList.find(x => x.id === id);
+  if (!d) return;
+  if (!confirm(`حذف الكود "${d.code}"؟`)) return;
+  const { error } = await supabase.from('discount_codes').delete().eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  await loadDiscounts();
+  showToast('🗑️ تم حذف الكود', 'success');
 }
 
 /* ════════════════════════════════════════
@@ -1673,6 +1826,7 @@ function renderOrderCard(order) {
       ${order.notes ? `<div class="order-address">📝 ${esc(order.notes)}</div>` : ''}
       <div class="order-items">${esc(itemsText)}</div>
       ${order.delivery_fee > 0 ? `<div class="order-address">🚚 رسوم التوصيل: ${parseFloat(order.delivery_fee).toFixed(3)} د.ك</div>` : ''}
+      ${order.discount_amount > 0 ? `<div class="order-address" style="color:#27ae60">🎟️ خصم${order.discount_code ? ' ('+esc(order.discount_code)+')' : ''}: −${parseFloat(order.discount_amount).toFixed(3)} د.ك</div>` : ''}
       <div class="order-footer">
         <span class="order-total">${total} د.ك</span>
         <span class="order-method">${method}</span>

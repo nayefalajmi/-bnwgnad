@@ -100,7 +100,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Payment gateway not configured — check Vercel env vars' });
   }
 
-  const { amount, deliveryFee, orderRef, items, customer } = req.body;
+  const { amount, deliveryFee, discountCode, discountAmount, orderRef, items, customer } = req.body;
 
   if (!amount || Number(amount) <= 0) {
     return res.status(400).json({ error: 'Invalid amount' });
@@ -111,16 +111,18 @@ export default async function handler(req, res) {
 
   /* Save the order (don't block checkout on a save failure) */
   await saveOrder({
-    order_ref:      ref,
-    customer_name:  customer?.name    || 'غير محدد',
-    customer_phone: customer?.phone   || '',
-    address:        customer?.address || '',
-    notes:          customer?.notes   || null,
-    items:          Array.isArray(items) ? items : [],
-    total:          parseFloat(parseFloat(amount).toFixed(3)),
-    delivery_fee:   parseFloat(parseFloat(deliveryFee || 0).toFixed(3)),
-    payment_method: 'card',
-    status:         'pending_payment',
+    order_ref:       ref,
+    customer_name:   customer?.name    || 'غير محدد',
+    customer_phone:  customer?.phone   || '',
+    address:         customer?.address || '',
+    notes:           customer?.notes   || null,
+    items:           Array.isArray(items) ? items : [],
+    total:           parseFloat(parseFloat(amount).toFixed(3)),
+    delivery_fee:    parseFloat(parseFloat(deliveryFee || 0).toFixed(3)),
+    discount_code:   discountCode || null,
+    discount_amount: parseFloat(parseFloat(discountAmount || 0).toFixed(3)),
+    payment_method:  'card',
+    status:          'pending_payment',
   });
 
   /* Build the Hesabe In-Direct payload */

@@ -354,6 +354,14 @@ body {
 }
 .variant-sel:focus { outline: none; border-color: var(--accent); }
 
+/* كود الخصم في صفحة الطلب */
+.discount-row { display: flex; gap: .5rem; }
+.discount-row input { flex: 1; }
+.discount-row .btn { white-space: nowrap; }
+.discount-msg { font-size: .82rem; margin-top: .35rem; min-height: 1rem; }
+.discount-msg.ok  { color: var(--success); }
+.discount-msg.err { color: var(--danger); }
+
 /* وسم المتغيّر في السلة */
 .cart-variant {
   display: inline-block;
