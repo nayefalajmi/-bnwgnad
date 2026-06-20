@@ -1228,8 +1228,10 @@ function openOrderDetails(id) {
       <h4>👤 العميل</h4>
       <div class="od-row"><span>الاسم</span><span>${esc(o.customer_name || '—')}</span></div>
       <div class="od-row"><span>الهاتف</span><span dir="ltr">${esc(o.customer_phone || '—')}</span></div>
+      ${o.customer_email ? `<div class="od-row"><span>الإيميل</span><span dir="ltr">${esc(o.customer_email)}</span></div>` : ''}
       <div class="od-row"><span>العنوان</span><span>${esc(o.address || '—')}</span></div>
       ${o.notes ? `<div class="od-row"><span>ملاحظات</span><span>${esc(o.notes)}</span></div>` : ''}
+      ${o.customer_ip ? `<div class="od-row"><span>IP</span><span dir="ltr" style="color:var(--text-muted);font-size:.78rem">${esc(o.customer_ip)}</span></div>` : ''}
     </div>
     <div class="od-section">
       <h4>🛒 الأصناف</h4>
