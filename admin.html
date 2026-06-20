@@ -171,6 +171,46 @@
 
     /* إخفاء المحتوى حتى يتم التحقق من جلسة الدخول */
     body.auth-pending { visibility: hidden; }
+
+    /* ── Smart Accountant ── */
+    .acc-controls { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; }
+    .acc-period { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .acc-period-btn {
+      padding: .35rem .9rem; border-radius: 2rem; border: 1.5px solid var(--border);
+      background: #fff; cursor: pointer; font-family: inherit; font-size: .85rem; transition: all .18s;
+    }
+    .acc-period-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    .acc-saved-list { display: flex; flex-direction: column; gap: .4rem; }
+    .acc-saved-item { display: flex; gap: .4rem; align-items: stretch; }
+    .acc-saved-open {
+      flex: 1; text-align: right; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: .5rem .8rem; cursor: pointer; font-family: inherit; font-size: .85rem; color: var(--text);
+    }
+    .acc-saved-open:hover { border-color: var(--accent); }
+    .acc-saved-del {
+      width: 38px; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+      color: #c0392b; cursor: pointer; font-size: .9rem;
+    }
+
+    .acc-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 700px) { .acc-grid2 { grid-template-columns: 1fr; } }
+
+    .acc-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    .acc-table th, .acc-table td { padding: .5rem .6rem; text-align: right; border-bottom: 1px solid var(--border); }
+    .acc-table th { color: var(--primary); font-weight: 700; font-size: .82rem; }
+    .acc-table tbody tr:last-child td { border-bottom: none; }
+
+    .acc-bar { background: var(--bg); border-radius: 1rem; height: 14px; overflow: hidden; border: 1px solid var(--border); }
+    .acc-bar-fill { height: 100%; background: var(--accent); border-radius: 1rem; transition: width .6s ease; }
+    .acc-bar-legend { display: flex; justify-content: space-between; font-size: .82rem; margin-top: .5rem; color: var(--text-muted); }
+
+    .acc-narrative .acc-md { line-height: 1.85; font-size: .92rem; color: var(--text); }
+    .acc-md h3 { font-size: 1.02rem; color: var(--primary); margin: 1.1rem 0 .5rem; }
+    .acc-md h4 { font-size: .95rem; color: var(--accent); margin: 1rem 0 .4rem; }
+    .acc-md p  { margin: .5rem 0; }
+    .acc-md ul { margin: .5rem 1.25rem .75rem; }
+    .acc-md li { margin: .3rem 0; }
   </style>
 </head>
 <body class="auth-pending">
@@ -204,6 +244,7 @@
     </a>
     <a href="#" data-section="stats" onclick="switchSection(event,'stats')">📊 الإحصائيات</a>
     <a href="#" data-section="banner" onclick="switchSection(event,'banner')">🖼️ البنر الإعلاني</a>
+    <a href="#" data-section="accountant" onclick="switchSection(event,'accountant')">🧮 المحاسب الذكي</a>
     <a href="index.html">🏪 المتجر</a>
     <a href="#" onclick="changePassword(event)">🔑 تغيير كلمة المرور</a>
     <a href="#" onclick="logout(event)" style="color:#c0392b">🚪 تسجيل الخروج</a>
@@ -357,6 +398,34 @@
           <button class="btn btn-accent" id="bannerSaveBtn" onclick="uploadBanner()" disabled>💾 تغيير صورة البنر</button>
         </div>
       </div>
+    </div>
+
+    <!-- ── Smart Accountant ── -->
+    <div id="sec-accountant" style="display:none">
+      <div class="admin-header">
+        <h2>🧮 المحاسب الذكي</h2>
+      </div>
+      <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1rem">
+        تقرير مالي وتحليلي شامل بالعربي، مبني على بيانات الطلبات الفعلية فقط
+        (إيرادات، متوسط الطلب، كاش/بطاقة، أكثر المنتجات والمناطق، ومقارنة بالفترة السابقة)
+        مع توصيات محددة بالأرقام.
+      </p>
+
+      <div class="acc-controls">
+        <div class="acc-period">
+          <span style="font-weight:600;font-size:.9rem">الفترة:</span>
+          <button class="acc-period-btn active" data-period="week"    onclick="selectAccPeriod('week')">أسبوعي</button>
+          <button class="acc-period-btn"        data-period="month"   onclick="selectAccPeriod('month')">شهري</button>
+          <button class="acc-period-btn"        data-period="quarter" onclick="selectAccPeriod('quarter')">ربع سنوي</button>
+        </div>
+        <button class="btn btn-accent" id="accGenBtn" onclick="generateReport()">📊 ولّد تقرير الآن</button>
+      </div>
+
+      <!-- التقارير المحفوظة -->
+      <div id="accSavedWrap" style="margin-top:1rem"></div>
+
+      <!-- منطقة عرض التقرير -->
+      <div id="accReport" style="margin-top:1.25rem"></div>
     </div>
 
   </main>
@@ -630,11 +699,13 @@ function switchSection(e, name) {
   document.getElementById('sec-stats').style.display    = name === 'stats'    ? 'block' : 'none';
   document.getElementById('sec-orders').style.display   = name === 'orders'   ? 'block' : 'none';
   document.getElementById('sec-banner').style.display   = name === 'banner'   ? 'block' : 'none';
+  document.getElementById('sec-accountant').style.display = name === 'accountant' ? 'block' : 'none';
   document.querySelectorAll('.admin-sidebar a[data-section]').forEach(a =>
     a.classList.toggle('active', a.dataset.section === name));
-  if (name === 'orders') loadOrders();
-  if (name === 'stats')  loadFullStats();
-  if (name === 'banner') loadBannerPreview();
+  if (name === 'orders')     loadOrders();
+  if (name === 'stats')      loadFullStats();
+  if (name === 'banner')     loadBannerPreview();
+  if (name === 'accountant') renderSavedReports();
 }
 
 function populateCatOptions() {
@@ -835,6 +906,179 @@ async function uploadBanner() {
     btn.textContent = '💾 تغيير صورة البنر';
     btn.disabled = false;
   }
+}
+
+/* ════════════════════════════════════════
+   SMART ACCOUNTANT (المحاسب الذكي)
+════════════════════════════════════════ */
+const ACC_STORE = 'bnw_accountant_reports';
+let accPeriod = 'week';
+
+function selectAccPeriod(p) {
+  accPeriod = p;
+  document.querySelectorAll('.acc-period-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.period === p));
+}
+
+/* توليد تقرير جديد عبر الـ backend */
+async function generateReport() {
+  const btn = document.getElementById('accGenBtn');
+  btn.textContent = '⏳ جاري توليد التقرير…';
+  btn.disabled = true;
+  document.getElementById('accReport').innerHTML =
+    '<div class="orders-empty"><div class="spinner" style="margin:0 auto 1rem"></div><p>المحاسب الذكي يحلّل بياناتك…</p></div>';
+  try {
+    /* الفرونت (جلسة الأدمن المصادَقة) يجلب طلبات الفترة ويرسلها للدالة */
+    const days = accPeriod === 'week' ? 7 : accPeriod === 'quarter' ? 90 : 30;
+    const sinceISO = new Date(Date.now() - 2 * days * 86400000).toISOString();
+    const { data: orders, error } = await supabase
+      .from('orders').select('*')
+      .gte('created_at', sinceISO)
+      .order('created_at', { ascending: false });
+    if (error) throw new Error('تعذّر جلب الطلبات: ' + error.message);
+
+    const resp = await fetch('/api/smart-accountant', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ period: accPeriod, orders: orders || [] }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.narrative) {
+      throw new Error(data.error || 'تعذّر توليد التقرير');
+    }
+    const id = 'rep-' + Date.now();
+    const record = { id, ...data };
+    saveReport(record);
+    renderReport(record);
+    renderSavedReports();
+    showToast('✅ تم توليد التقرير', 'success');
+  } catch (err) {
+    document.getElementById('accReport').innerHTML =
+      `<div class="orders-empty">❌ ${esc(err.message)}</div>`;
+    showToast('❌ ' + err.message, 'error');
+  } finally {
+    btn.textContent = '📊 ولّد تقرير الآن';
+    btn.disabled = false;
+  }
+}
+
+/* حفظ/قراءة التقارير في localStorage */
+function loadReports() {
+  try { return JSON.parse(localStorage.getItem(ACC_STORE) || '[]'); } catch (e) { return []; }
+}
+function saveReport(rec) {
+  const all = loadReports();
+  all.unshift(rec);
+  localStorage.setItem(ACC_STORE, JSON.stringify(all.slice(0, 30)));   // آخر 30 تقريراً
+}
+function deleteReport(id) {
+  localStorage.setItem(ACC_STORE, JSON.stringify(loadReports().filter(r => r.id !== id)));
+  renderSavedReports();
+}
+function viewReport(id) {
+  const rec = loadReports().find(r => r.id === id);
+  if (rec) { renderReport(rec); document.getElementById('accReport').scrollIntoView({ behavior: 'smooth' }); }
+}
+
+/* قائمة التقارير المحفوظة */
+function renderSavedReports() {
+  const wrap = document.getElementById('accSavedWrap');
+  const all  = loadReports();
+  if (!all.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML =
+    '<p style="font-weight:600;font-size:.9rem;margin-bottom:.5rem">التقارير المحفوظة</p>' +
+    '<div class="acc-saved-list">' +
+    all.map(r => `
+      <div class="acc-saved-item">
+        <button class="acc-saved-open" onclick="viewReport('${r.id}')">
+          📄 ${esc(r.periodLabel || r.period)} — ${new Date(r.generatedAt || Date.now()).toLocaleString('ar-KW')}
+        </button>
+        <button class="acc-saved-del" onclick="deleteReport('${r.id}')" title="حذف">✕</button>
+      </div>`).join('') +
+    '</div>';
+}
+
+/* عرض تقرير كامل (جداول الأرقام + السرد) */
+function renderReport(r) {
+  const c = r.current || {}, p = r.previous || {}, ch = r.changes || {};
+  const kwd = n => `${(Number(n) || 0).toFixed(3)} د.ك`;
+  const arrow = v => v == null ? '—'
+    : v > 0 ? `<span style="color:#27ae60">▲ ${v}%</span>`
+    : v < 0 ? `<span style="color:#e74c3c">▼ ${Math.abs(v)}%</span>`
+    : '0%';
+
+  const summaryRows = [
+    ['الإيرادات (مكتملة)', kwd(c.revenue),       arrow(ch.revenuePct)],
+    ['إجمالي الطلبات',     c.ordersTotal ?? 0,    arrow(ch.ordersTotalPct)],
+    ['الطلبات المكتملة',   c.ordersCompleted ?? 0,arrow(ch.ordersCompletedPct)],
+    ['متوسط قيمة الطلب',   kwd(c.avgOrderValue),  arrow(ch.avgOrderValuePct)],
+  ].map(([k, v, d]) => `<tr><td>${k}</td><td style="font-weight:700">${v}</td><td>${d}</td></tr>`).join('');
+
+  const totalPay = (c.cashCount || 0) + (c.cardCount || 0);
+  const cashPct = totalPay ? Math.round((c.cashCount / totalPay) * 100) : 0;
+
+  const prodRows = (c.topProducts || []).length
+    ? c.topProducts.map((x, i) => `<tr><td>${i + 1}. ${esc(x.name)}</td><td>${x.qty}</td><td>${kwd(x.revenue)}</td></tr>`).join('')
+    : '<tr><td colspan="3" style="text-align:center;color:var(--text-muted)">لا توجد مبيعات مكتملة</td></tr>';
+
+  const areaRows = (c.topAreas || []).length
+    ? c.topAreas.map((x, i) => `<tr><td>${i + 1}. ${esc(x.area)}</td><td>${x.count} طلب</td></tr>`).join('')
+    : '<tr><td colspan="2" style="text-align:center;color:var(--text-muted)">لا توجد بيانات عناوين</td></tr>';
+
+  document.getElementById('accReport').innerHTML = `
+    <div class="chart-card">
+      <h3>📅 ${esc(r.periodLabel || r.period)}</h3>
+      <table class="acc-table">
+        <thead><tr><th>المؤشر</th><th>القيمة</th><th>مقارنة بالفترة السابقة</th></tr></thead>
+        <tbody>${summaryRows}</tbody>
+      </table>
+    </div>
+
+    <div class="acc-grid2">
+      <div class="chart-card">
+        <h3>💳 كاش مقابل بطاقة (المكتملة)</h3>
+        <div class="acc-bar"><div class="acc-bar-fill" style="width:${cashPct}%"></div></div>
+        <div class="acc-bar-legend">
+          <span>💵 كاش: ${c.cashCount || 0} (${cashPct}%)</span>
+          <span>💳 بطاقة: ${c.cardCount || 0} (${100 - cashPct}%)</span>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h3>📍 أكثر مناطق التوصيل</h3>
+        <table class="acc-table"><tbody>${areaRows}</tbody></table>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>🏆 أكثر 5 منتجات مبيعاً</h3>
+      <table class="acc-table">
+        <thead><tr><th>المنتج</th><th>الكمية</th><th>الإيراد</th></tr></thead>
+        <tbody>${prodRows}</tbody>
+      </table>
+    </div>
+
+    <div class="chart-card acc-narrative">
+      <h3>📝 التقرير التحليلي والتوصيات</h3>
+      <div class="acc-md">${mdToHtml(r.narrative || '')}</div>
+    </div>`;
+}
+
+/* تحويل ماركداون بسيط إلى HTML (مع تهريب) */
+function mdToHtml(md) {
+  const lines = String(md).split('\n');
+  let html = '', inList = false;
+  const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
+  for (let raw of lines) {
+    let line = esc(raw.trim());
+    line = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    if (/^##\s+/.test(line))      { closeList(); html += `<h4>${line.replace(/^##\s+/, '')}</h4>`; }
+    else if (/^#\s+/.test(line))  { closeList(); html += `<h3>${line.replace(/^#\s+/, '')}</h3>`; }
+    else if (/^[-•]\s+/.test(line)){ if (!inList) { html += '<ul>'; inList = true; } html += `<li>${line.replace(/^[-•]\s+/, '')}</li>`; }
+    else if (line === '')         { closeList(); }
+    else                          { closeList(); html += `<p>${line}</p>`; }
+  }
+  closeList();
+  return html;
 }
 
 async function saveProduct() {
