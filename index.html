@@ -37,6 +37,12 @@
   <h1>☕ بن وقناد</h1>
 </section>
 
+<!-- ══ SEARCH ══ -->
+<div class="store-search">
+  <input type="search" id="searchInput" placeholder="🔍 ابحث عن منتج بالاسم…"
+         oninput="onSearchInput(this.value)" autocomplete="off" />
+</div>
+
 <!-- ══ FILTERS ══ -->
 <div class="filters" id="filters">
   <button class="filter-btn active" data-cat="all">الكل</button>
@@ -162,7 +168,25 @@ function getIcon(name, cat) {
 
 /* ─── State ─── */
 let allProducts = [];
+let activeCat   = 'all';
+let searchTerm  = '';
 let cart = JSON.parse(localStorage.getItem('bnwgnad_cart') || '[]');
+
+/* فلترة مباشرة حسب الفئة + نص البحث */
+function applyFilters() {
+  const q = searchTerm.trim().toLowerCase();
+  let list = activeCat === 'all'
+    ? allProducts
+    : allProducts.filter(p => p.Category === activeCat);
+  if (q) list = list.filter(p => (p.Name || '').toLowerCase().includes(q));
+  renderProducts(list);
+}
+
+/* يُستدعى أثناء الكتابة في خانة البحث */
+function onSearchInput(value) {
+  searchTerm = value;
+  applyFilters();
+}
 
 /* ════════════════════════════
    PRODUCTS
@@ -177,7 +201,7 @@ async function loadProducts() {
   }
   allProducts = data;
   buildFilters(data);
-  renderProducts(data);
+  applyFilters();
 }
 
 function buildFilters(data) {
@@ -190,8 +214,8 @@ function buildFilters(data) {
     btn.addEventListener('click', () => {
       el.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      const cat = btn.dataset.cat;
-      renderProducts(cat==='all' ? allProducts : allProducts.filter(p => p.Category===cat));
+      activeCat = btn.dataset.cat;
+      applyFilters();
     });
   });
 }
@@ -199,7 +223,10 @@ function buildFilters(data) {
 function renderProducts(list) {
   const grid = document.getElementById('productsGrid');
   if (!list.length) {
-    grid.innerHTML = '<div class="empty-state"><p>لا توجد منتجات في هذه الفئة</p></div>';
+    const msg = searchTerm.trim()
+      ? `لا توجد نتائج لـ «${searchTerm.trim()}»`
+      : 'لا توجد منتجات في هذه الفئة';
+    grid.innerHTML = `<div class="empty-state"><p>${msg}</p></div>`;
     return;
   }
   grid.innerHTML = list.map(p => {
