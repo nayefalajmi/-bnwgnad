@@ -206,6 +206,9 @@
     .acc-bar-legend { display: flex; justify-content: space-between; font-size: .82rem; margin-top: .5rem; color: var(--text-muted); }
 
     .acc-narrative .acc-md { line-height: 1.85; font-size: .92rem; color: var(--text); }
+    .acc-stream { white-space: pre-wrap; }   /* نص حيّ أثناء البثّ */
+    .acc-stream::after { content: '▌'; color: var(--accent); animation: accBlink 1s steps(1) infinite; }
+    @keyframes accBlink { 50% { opacity: 0; } }
     .acc-md h3 { font-size: 1.02rem; color: var(--primary); margin: 1.1rem 0 .5rem; }
     .acc-md h4 { font-size: .95rem; color: var(--accent); margin: 1rem 0 .4rem; }
     .acc-md p  { margin: .5rem 0; }
@@ -920,13 +923,14 @@ function selectAccPeriod(p) {
     b.classList.toggle('active', b.dataset.period === p));
 }
 
-/* توليد تقرير جديد عبر الـ backend */
+/* توليد تقرير جديد (streaming — يظهر كلمة كلمة) */
 async function generateReport() {
   const btn = document.getElementById('accGenBtn');
-  btn.textContent = '⏳ جاري توليد التقرير…';
+  btn.textContent = '⏳ جاري التحليل…';
   btn.disabled = true;
   document.getElementById('accReport').innerHTML =
     '<div class="orders-empty"><div class="spinner" style="margin:0 auto 1rem"></div><p>المحاسب الذكي يحلّل بياناتك…</p></div>';
+
   try {
     /* الفرونت (جلسة الأدمن المصادَقة) يجلب طلبات الفترة ويرسلها للدالة */
     const days = accPeriod === 'week' ? 7 : accPeriod === 'quarter' ? 90 : 30;
@@ -942,16 +946,62 @@ async function generateReport() {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ period: accPeriod, orders: orders || [] }),
     });
-    const data = await resp.json();
-    if (!resp.ok || !data.narrative) {
-      throw new Error(data.error || 'تعذّر توليد التقرير');
+
+    /* خطأ مبكر (JSON) قبل بدء البثّ */
+    if (!resp.ok || !resp.body) {
+      let msg = 'تعذّر توليد التقرير';
+      try { const e = await resp.json(); msg = e.error || msg; } catch (_) {}
+      throw new Error(msg);
     }
-    const id = 'rep-' + Date.now();
-    const record = { id, ...data };
+
+    const reader  = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', meta = null, narrative = '', streamEl = null;
+
+    const handle = (ev) => {
+      if (ev.type === 'meta') {
+        meta = ev;
+        renderReportShell(meta);                       // الجداول + حاوية البثّ
+        streamEl = document.getElementById('accStream');
+        btn.textContent = '✍️ يكتب التقرير…';
+      } else if (ev.type === 'delta' && streamEl) {
+        narrative += ev.text;
+        streamEl.textContent = narrative;              // نص حيّ كلمة كلمة
+        streamEl.scrollIntoView({ block: 'nearest' });
+      } else if (ev.type === 'error') {
+        throw new Error(ev.error || 'خطأ أثناء التوليد');
+      }
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const ln of lines) {
+        const t = ln.trim();
+        if (!t) continue;
+        let ev; try { ev = JSON.parse(t); } catch (_) { continue; }
+        handle(ev);
+      }
+    }
+    if (buf.trim()) { try { handle(JSON.parse(buf.trim())); } catch (_) {} }
+
+    if (!meta) throw new Error('لم تصل بيانات التقرير');
+    if (!narrative.trim()) throw new Error('لم يصل نص التقرير');
+
+    /* تنسيق نهائي + حفظ */
+    const metaClean = { ...meta }; delete metaClean.type;
+    const record = { id: 'rep-' + Date.now(), ...metaClean, narrative };
+    if (streamEl) {                                           // تنسيق نهائي + إيقاف المؤشر
+      streamEl.classList.remove('acc-stream');
+      streamEl.innerHTML = mdToHtml(narrative);
+    }
     saveReport(record);
-    renderReport(record);
     renderSavedReports();
     showToast('✅ تم توليد التقرير', 'success');
+
   } catch (err) {
     document.getElementById('accReport').innerHTML =
       `<div class="orders-empty">❌ ${esc(err.message)}</div>`;
@@ -998,9 +1048,9 @@ function renderSavedReports() {
     '</div>';
 }
 
-/* عرض تقرير كامل (جداول الأرقام + السرد) */
-function renderReport(r) {
-  const c = r.current || {}, p = r.previous || {}, ch = r.changes || {};
+/* بناء جداول الأرقام (المشترك بين العرض المباشر والبثّ) */
+function accTablesHtml(r) {
+  const c = r.current || {}, ch = r.changes || {};
   const kwd = n => `${(Number(n) || 0).toFixed(3)} د.ك`;
   const arrow = v => v == null ? '—'
     : v > 0 ? `<span style="color:#27ae60">▲ ${v}%</span>`
@@ -1025,7 +1075,7 @@ function renderReport(r) {
     ? c.topAreas.map((x, i) => `<tr><td>${i + 1}. ${esc(x.area)}</td><td>${x.count} طلب</td></tr>`).join('')
     : '<tr><td colspan="2" style="text-align:center;color:var(--text-muted)">لا توجد بيانات عناوين</td></tr>';
 
-  document.getElementById('accReport').innerHTML = `
+  return `
     <div class="chart-card">
       <h3>📅 ${esc(r.periodLabel || r.period)}</h3>
       <table class="acc-table">
@@ -1055,8 +1105,21 @@ function renderReport(r) {
         <thead><tr><th>المنتج</th><th>الكمية</th><th>الإيراد</th></tr></thead>
         <tbody>${prodRows}</tbody>
       </table>
-    </div>
+    </div>`;
+}
 
+/* أثناء البثّ: الجداول فوراً + حاوية نص حيّة (تُملأ كلمة كلمة) */
+function renderReportShell(meta) {
+  document.getElementById('accReport').innerHTML = accTablesHtml(meta) + `
+    <div class="chart-card acc-narrative">
+      <h3>📝 التقرير التحليلي والتوصيات</h3>
+      <div class="acc-md acc-stream" id="accStream"></div>
+    </div>`;
+}
+
+/* عرض تقرير محفوظ كامل (جداول + سرد منسّق) */
+function renderReport(r) {
+  document.getElementById('accReport').innerHTML = accTablesHtml(r) + `
     <div class="chart-card acc-narrative">
       <h3>📝 التقرير التحليلي والتوصيات</h3>
       <div class="acc-md">${mdToHtml(r.narrative || '')}</div>
