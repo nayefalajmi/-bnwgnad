@@ -80,9 +80,15 @@ export default async function handler(req) {
 
   let body;
   try { body = await req.json(); } catch (_) { body = {}; }
-  const { period: periodIn = 'month', orders } = body;
+  const { period: periodIn = 'month', orders, dataSource: dsIn = 'site', shop = null } = body;
   if (!Array.isArray(orders)) {
     return json({ error: 'بيانات الطلبات (orders) مفقودة أو غير صحيحة' }, 400);
+  }
+  const dataSource = ['site', 'shop', 'both'].includes(dsIn) ? dsIn : 'site';
+  const needSite = dataSource === 'site' || dataSource === 'both';
+  const needShop = dataSource === 'shop' || dataSource === 'both';
+  if (needShop && (!shop || !shop.current)) {
+    return json({ error: 'بيانات المحل مطلوبة لهذا المصدر لكنها مفقودة' }, 400);
   }
 
   const days  = periodIn === 'week' ? 7 : periodIn === 'quarter' ? 90 : 30;
@@ -105,14 +111,36 @@ export default async function handler(req) {
     avgOrderValuePct:   pct(metrics.avgOrderValue,   prevMetrics.avgOrderValue),
   };
 
+  /* مبيعات المحل (محسوبة في الفرونت من ملف CSV) — نعيدها كما هي في الـ meta */
+  const shopMeta = needShop && shop
+    ? { current: shop.current || {}, previous: shop.previous || {} }
+    : null;
+
+  const sourceLabel = dataSource === 'both' ? 'الموقع + المحل (مدموجان)'
+                    : dataSource === 'shop' ? 'المحل فقط'
+                    : 'الموقع فقط';
+
+  /* الإجمالي المدموج (موقع + محل) عندما يكون المصدر "both" */
+  const combined = dataSource === 'both' && shopMeta
+    ? {
+        revenue: round3((metrics.revenue || 0) + (shopMeta.current.netSales || 0)),
+        siteRevenue: metrics.revenue || 0,
+        shopNetSales: shopMeta.current.netSales || 0,
+      }
+    : null;
+
   const reportMeta = {
     type: 'meta',
     period: periodIn,
     periodLabel: label,
     currency: 'KWD',
-    current: metrics,
-    previous: prevMetrics,
-    changes,
+    dataSource,
+    sourceLabel,
+    current: needSite ? metrics : {},
+    previous: needSite ? prevMetrics : {},
+    changes: needSite ? changes : {},
+    shop: shopMeta,
+    combined,
     generatedAt: new Date().toISOString(),
   };
 
@@ -124,13 +152,19 @@ export default async function handler(req) {
     'قواعد صارمة:\n' +
     '- اعتمد 100% على الأرقام المعطاة. لا تخترع أي رقم أو معلومة غير موجودة في البيانات.\n' +
     '- العملة دائماً الدينار الكويتي (د.ك).\n' +
+    '- مصدر بيانات هذا التقرير: ' + sourceLabel + '. هناك مصدران ممكنان:\n' +
+    '    • "الموقع" = الطلبات الإلكترونية (الحقل current/previous: إيرادات، طلبات، منتجات، مناطق).\n' +
+    '    • "المحل" = مبيعات الفرع من ملف المحاسبة (الحقل shop: إجمالي البيع، المستردات، الخصومات، صافي المبيعات، تكلفة البضاعة، إجمالي الربح، الهامش).\n' +
+    '- مهم جداً: عند ذكر أي رقم، وضّح مصدره صراحةً بكلمة بين قوسين: (موقع) أو (محل) أو (إجمالي).\n' +
+    '- إن كان المصدر مدموجاً، قارن بين أداء الموقع والمحل، واذكر الإجمالي المدموج من الحقل combined.\n' +
+    '- ملاحظة: أرقام التكلفة والربح والهامش متوفرة من المحل فقط (الموقع لا يحوي تكلفة بضاعة).\n' +
     '- نظّم التقرير بعناوين واضحة (استخدم ## للعناوين و- للنقاط).\n' +
-    '- قارن الفترة الحالية بالفترة السابقة واذكر نسب التغيّر (هي معطاة في الحقل changes).\n' +
-    '- اختم بقسم "## التوصيات" يحتوي توصيات محددة، كل توصية مدعومة برقم صريح من البيانات.\n' +
+    '- قارن الفترة الحالية بالفترة السابقة واذكر نسب التغيّر.\n' +
+    '- اختم بقسم "## التوصيات" يحتوي توصيات محددة، كل توصية مدعومة برقم صريح من البيانات مع ذكر مصدره.\n' +
     '- إذا كانت البيانات قليلة أو صفرية، قُل ذلك بوضوح ولا تبالغ.\n' +
     '- لا تكتب جداول؛ التطبيق يعرض الجداول الرقمية. ركّز على التحليل السردي والتوصيات.';
   const user =
-    'هذه بيانات المتجر للفترة المطلوبة (محسوبة من قاعدة البيانات). اكتب التقرير الكامل:\n\n' +
+    'هذه بيانات "بن وقناد" للفترة المطلوبة (مصدرها: ' + sourceLabel + '). اكتب التقرير الكامل مع توضيح مصدر كل رقم:\n\n' +
     '```json\n' + JSON.stringify(promptData, null, 2) + '\n```';
 
   /* استدعاء Claude بوضع streaming */
