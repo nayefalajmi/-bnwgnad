@@ -208,6 +208,22 @@
       border-radius: 1rem; font-size: .75rem; margin: 1px;
     }
 
+    /* محرّر المتغيرات */
+    .var-editor { display: flex; flex-direction: column; gap: .45rem; }
+    .var-row { display: flex; gap: .45rem; align-items: center; }
+    .var-row .var-label { flex: 2; }
+    .var-row .var-price { flex: 1; min-width: 90px; }
+    .var-row input {
+      padding: .5rem .7rem; border: 1.5px solid var(--border);
+      border-radius: 8px; font-family: inherit; font-size: .88rem;
+    }
+    .var-row input:focus { outline: none; border-color: var(--accent); }
+    .var-del {
+      width: 36px; height: 36px; flex-shrink: 0;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: #fff; color: #c0392b; cursor: pointer; font-size: .9rem;
+    }
+
     /* ── Smart Accountant ── */
     .acc-controls { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; }
     .acc-period { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
@@ -521,6 +537,15 @@
     </div>
 
     <div class="form-group">
+      <label>المتغيرات (أوزان/أحجام بأسعار مختلفة — اختياري)</label>
+      <div id="fVariants" class="var-editor"></div>
+      <button type="button" class="btn btn-sm btn-outline" style="margin-top:.5rem" onclick="addVariantRow()">➕ إضافة متغيّر</button>
+      <p style="color:var(--text-muted);font-size:.78rem;margin-top:.35rem">
+        لو ما فيه متغيرات، يُباع المنتج بالسعر الأساسي أعلاه.
+      </p>
+    </div>
+
+    <div class="form-group">
       <label>الوصف</label>
       <textarea id="fDesc" rows="2" placeholder="وصف اختياري…"></textarea>
     </div>
@@ -573,6 +598,7 @@
 ════════════════════════════════════════ */
 let products   = [];
 let categoriesList = [];        // الفئات المرتّبة من جدول categories
+let hasVariantsCol = false;     // هل عمود variants موجود؟ (قبل تشغيل sql/variants.sql)
 let editingId  = null;
 let deletingId = null;
 let uploadedFile = null;
@@ -592,6 +618,7 @@ async function loadProducts() {
   const { data, error } = await supabase.from('products').select('*').order('id');
   if (error) { showToast('خطأ في تحميل البيانات', 'error'); return; }
   products = data;
+  hasVariantsCol = !data.length || ('variants' in data[0]);   // كشف عمود variants
   renderTable(products);
   updateStats();
   populateCatOptions();
@@ -900,6 +927,7 @@ function openModal(id = null) {
       if (c) selIds = [c.id];
     }
     renderCatChecklist(selIds);
+    renderVariantsEditor(p.variants);
     if (p.image_url) {
       preview.src = p.image_url;
       preview.style.display = 'block';
@@ -912,6 +940,7 @@ function openModal(id = null) {
     document.getElementById('fAvail').checked  = true;
     document.getElementById('fImageUrl').value = '';
     renderCatChecklist([]);
+    renderVariantsEditor([]);
   }
   document.getElementById('modalOverlay').classList.add('open');
 }
@@ -927,6 +956,36 @@ function renderCatChecklist(selectedIds) {
   el.innerHTML = categoriesList.map(c =>
     `<label class="cat-check"><input type="checkbox" value="${c.id}" ${sel.has(c.id) ? 'checked' : ''}/> ${esc(c.name)}</label>`
   ).join('');
+}
+
+/* ── محرّر المتغيرات في نافذة المنتج ── */
+function renderVariantsEditor(variants) {
+  const el = document.getElementById('fVariants');
+  el.innerHTML = '';
+  (Array.isArray(variants) ? variants : []).forEach(v => addVariantRow(v.label, v.price));
+}
+
+function addVariantRow(label = '', price = '') {
+  const el = document.getElementById('fVariants');
+  const row = document.createElement('div');
+  row.className = 'var-row';
+  row.innerHTML = `
+    <input type="text"   class="var-label" placeholder="الوصف (مثل 250 جرام)" value="${esc(String(label))}" />
+    <input type="number" class="var-price" placeholder="السعر" min="0" step="0.001" value="${price === '' ? '' : price}" />
+    <button type="button" class="var-del" title="حذف" onclick="this.parentNode.remove()">✕</button>`;
+  el.appendChild(row);
+}
+
+/* اقرأ المتغيرات من المحرّر (تجاهل الصفوف الفارغة) */
+function readVariants() {
+  const rows = [...document.querySelectorAll('#fVariants .var-row')];
+  const out = [];
+  for (const r of rows) {
+    const label = r.querySelector('.var-label').value.trim();
+    const price = parseFloat(r.querySelector('.var-price').value);
+    if (label && !isNaN(price) && price >= 0) out.push({ label, price });
+  }
+  return out;
 }
 function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
 
@@ -1370,9 +1429,11 @@ async function saveProduct() {
   try {
     let imageUrl = document.getElementById('fImageUrl').value.trim() || null;
     if (uploadedFile) imageUrl = await uploadImage(uploadedFile);
+    const variants = readVariants();
     const payload = {
       Name: name, Category: firstCatName, category_ids: catIds,
       Price: price, Description: desc || null, Available: avail,
+      ...(hasVariantsCol ? { variants: variants.length ? variants : null } : {}),
       ...(imageUrl !== undefined ? { image_url: imageUrl } : {})
     };
     let error;
