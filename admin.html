@@ -203,6 +203,7 @@
       <span class="sidebar-badge" id="ordersBadge" style="display:none">0</span>
     </a>
     <a href="#" data-section="stats" onclick="switchSection(event,'stats')">📊 الإحصائيات</a>
+    <a href="#" data-section="banner" onclick="switchSection(event,'banner')">🖼️ البنر الإعلاني</a>
     <a href="index.html">🏪 المتجر</a>
     <a href="#" onclick="changePassword(event)">🔑 تغيير كلمة المرور</a>
     <a href="#" onclick="logout(event)" style="color:#c0392b">🚪 تسجيل الخروج</a>
@@ -322,6 +323,38 @@
         <div class="orders-empty">
           <div class="spinner" style="margin:0 auto 1rem"></div>
           <p>جاري تحميل الطلبات…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Banner ── -->
+    <div id="sec-banner" style="display:none">
+      <div class="admin-header">
+        <h2>🖼️ البنر الإعلاني</h2>
+      </div>
+      <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1rem">
+        ارفع صورة تظهر كبنر كامل العرض أعلى صفحة المتجر. يُفضّل صورة عريضة
+        (مثلاً 1600×500 بكسل). الصورة الجديدة تستبدل القديمة وتظهر فوراً للزوار.
+      </p>
+
+      <div class="chart-card" style="max-width:720px">
+        <p style="font-weight:600;margin-bottom:.6rem">البنر الحالي</p>
+        <div id="bannerCurrentWrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg);min-height:120px;display:flex;align-items:center;justify-content:center">
+          <span id="bannerCurrentEmpty" style="color:var(--text-muted);padding:2rem;font-size:.9rem">لا يوجد بنر مرفوع بعد</span>
+          <img id="bannerCurrentImg" alt="البنر الحالي" style="display:none;width:100%;height:auto" />
+        </div>
+
+        <div class="img-upload-area" id="bannerUploadArea" style="margin-top:1.25rem">
+          <input type="file" id="bannerFile" accept="image/*" onchange="previewBannerFile(event)" />
+          <div id="bannerPlaceholder">
+            <div class="upload-icon">🖼️</div>
+            <p class="upload-text">اضغط لاختيار صورة البنر أو اسحب وأفلت</p>
+          </div>
+          <img id="bannerPreview" class="img-preview" alt="معاينة البنر" />
+        </div>
+
+        <div class="modal-footer" style="margin-top:1rem">
+          <button class="btn btn-accent" id="bannerSaveBtn" onclick="uploadBanner()" disabled>💾 رفع ونشر البنر</button>
         </div>
       </div>
     </div>
@@ -596,10 +629,12 @@ function switchSection(e, name) {
   document.getElementById('sec-products').style.display = name === 'products' ? 'block' : 'none';
   document.getElementById('sec-stats').style.display    = name === 'stats'    ? 'block' : 'none';
   document.getElementById('sec-orders').style.display   = name === 'orders'   ? 'block' : 'none';
+  document.getElementById('sec-banner').style.display   = name === 'banner'   ? 'block' : 'none';
   document.querySelectorAll('.admin-sidebar a[data-section]').forEach(a =>
     a.classList.toggle('active', a.dataset.section === name));
   if (name === 'orders') loadOrders();
   if (name === 'stats')  loadFullStats();
+  if (name === 'banner') loadBannerPreview();
 }
 
 function populateCatOptions() {
@@ -739,6 +774,67 @@ async function uploadImage(file) {
   if (error) throw new Error('فشل رفع الصورة: ' + error.message);
   const { data } = supabase.storage.from('product-images').getPublicUrl(path);
   return data.publicUrl;
+}
+
+/* ════════════════════════════════════════
+   BANNER (البنر الإعلاني)
+════════════════════════════════════════ */
+const BANNER_BUCKET = 'product-images';
+const BANNER_PATH   = 'banners/hero.jpg';   // مسار ثابت — يُستبدل عند كل رفع
+let bannerFile = null;
+
+/* عرض البنر الحالي المرفوع */
+async function loadBannerPreview() {
+  const wrap  = document.getElementById('bannerCurrentImg');
+  const empty = document.getElementById('bannerCurrentEmpty');
+  try {
+    const { data } = await supabase.storage.from(BANNER_BUCKET).list('banners', { limit: 100 });
+    const file = (data || []).find(f => f.name.startsWith('hero'));
+    if (!file) { wrap.style.display = 'none'; empty.style.display = 'block'; return; }
+    const { data: pub } = supabase.storage.from(BANNER_BUCKET).getPublicUrl(`banners/${file.name}`);
+    const ver = file.updated_at || file.created_at || Date.now();
+    wrap.src = pub.publicUrl + '?t=' + encodeURIComponent(ver);
+    wrap.style.display = 'block';
+    empty.style.display = 'none';
+  } catch (e) {
+    wrap.style.display = 'none'; empty.style.display = 'block';
+  }
+}
+
+/* معاينة الصورة المختارة قبل الرفع */
+function previewBannerFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  bannerFile = file;
+  const preview = document.getElementById('bannerPreview');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  document.getElementById('bannerPlaceholder').style.display = 'none';
+  document.getElementById('bannerSaveBtn').disabled = false;
+}
+
+/* رفع البنر إلى Supabase Storage ونشره */
+async function uploadBanner() {
+  if (!bannerFile) { showToast('⚠️ اختر صورة أولاً', 'error'); return; }
+  const btn = document.getElementById('bannerSaveBtn');
+  btn.textContent = '⏳ جاري الرفع…';
+  btn.disabled = true;
+  try {
+    const { error } = await supabase.storage.from(BANNER_BUCKET)
+      .upload(BANNER_PATH, bannerFile, { cacheControl: '3600', upsert: true, contentType: bannerFile.type });
+    if (error) throw new Error(error.message);
+    showToast('✅ تم نشر البنر — سيظهر للزوار فوراً', 'success');
+    bannerFile = null;
+    document.getElementById('bannerFile').value = '';
+    document.getElementById('bannerPreview').style.display = 'none';
+    document.getElementById('bannerPlaceholder').style.display = 'block';
+    await loadBannerPreview();
+  } catch (err) {
+    showToast('❌ فشل رفع البنر: ' + err.message, 'error');
+  } finally {
+    btn.textContent = '💾 رفع ونشر البنر';
+    btn.disabled = false;
+  }
 }
 
 async function saveProduct() {
