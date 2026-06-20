@@ -129,7 +129,7 @@
       <div class="addr-row">
         <div class="form-group">
           <label>المنطقة *</label>
-          <input type="text" id="aArea" placeholder="السالمية، حولي…" />
+          <select id="aArea" onchange="renderCheckoutSummary()"></select>
         </div>
         <div class="form-group">
           <label>الشارع *</label>
@@ -196,6 +196,7 @@ function getIcon(name, cat) {
 /* ─── State ─── */
 let allProducts = [];
 let categories  = [];          // الفئات المرتّبة من جدول categories
+let deliveryZones = [];        // مناطق التوصيل ورسومها
 let activeCat   = 'all';       // 'all' أو معرّف فئة (id)
 let searchTerm  = '';
 let cart = JSON.parse(localStorage.getItem('bnwgnad_cart') || '[]');
@@ -490,12 +491,41 @@ function selectPayMethod(method) {
     method === 'card' ? 'الدفع بالبطاقة ←' : 'تأكيد الطلب ✓';
 }
 
-function startCheckout() {
-  if (!cart.length) return;
+/* ─── مناطق التوصيل ─── */
+async function loadDeliveryZones() {
+  try {
+    const { data, error } = await supabase
+      .from('delivery_zones').select('*').order('sort_order', { ascending: true });
+    deliveryZones = (!error && Array.isArray(data)) ? data : [];
+  } catch (e) { deliveryZones = []; }
+  populateZoneSelect();
+}
 
-  /* Build order summary */
-  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const summaryHtml = `
+function populateZoneSelect() {
+  const sel = document.getElementById('aArea');
+  if (!sel) return;
+  if (deliveryZones.length) {
+    sel.innerHTML = deliveryZones.map(z =>
+      `<option value="${z.name}" data-fee="${z.fee}">${z.name} — ${parseFloat(z.fee||0).toFixed(2)} د.ك توصيل</option>`
+    ).join('');
+  } else {
+    /* توافق: لا جدول مناطق بعد → خيار واحد بلا رسم */
+    sel.innerHTML = '<option value="التوصيل عند الاستلام" data-fee="0">التوصيل عند الاستلام</option>';
+  }
+}
+
+function selectedZoneFee() {
+  const sel = document.getElementById('aArea');
+  const opt = sel && sel.options[sel.selectedIndex];
+  return opt ? parseFloat(opt.dataset.fee || 0) : 0;
+}
+
+/* ملخّص الطلب داخل نموذج العنوان (منتجات + توصيل + الكلّي) */
+function renderCheckoutSummary() {
+  const products = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const fee   = selectedZoneFee();
+  const grand = products + fee;
+  document.getElementById('addrSummary').innerHTML = `
     <div class="addr-summary-box">
       <p class="addr-summary-title">ملخص الطلب</p>
       ${cart.map(i =>
@@ -504,12 +534,19 @@ function startCheckout() {
           <span>${(i.price * i.qty).toFixed(2)} د.ك</span>
         </div>`
       ).join('')}
+      <div class="addr-summary-row"><span>المنتجات</span><span>${products.toFixed(2)} د.ك</span></div>
+      <div class="addr-summary-row"><span>التوصيل</span><span>${fee.toFixed(2)} د.ك</span></div>
       <div class="addr-summary-total">
-        <span>المجموع</span>
-        <span>${total.toFixed(2)} د.ك</span>
+        <span>المجموع الكلي</span>
+        <span>${grand.toFixed(2)} د.ك</span>
       </div>
     </div>`;
-  document.getElementById('addrSummary').innerHTML = summaryHtml;
+}
+
+function startCheckout() {
+  if (!cart.length) return;
+
+  renderCheckoutSummary();
 
   /* Reset pay button & method */
   selectedPayMethod = 'card';
@@ -520,7 +557,7 @@ function startCheckout() {
   closeCart();
   document.getElementById('addressOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
-  trackBeginCheckout(total, cart);
+  trackBeginCheckout(cart.reduce((s, i) => s + i.price * i.qty, 0), cart);
 }
 
 function closeAddress() {
@@ -545,7 +582,9 @@ async function submitAddress() {
   const btn = document.getElementById('payBtn');
   btn.disabled = true;
 
-  const total    = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const products = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const fee      = selectedZoneFee();
+  const total    = products + fee;
   const orderRef = 'ORD-' + Date.now();
   const address  = `${area}، ${street}، ${building}${flat ? ' ش'+flat : ''}`;
 
@@ -561,6 +600,7 @@ async function submitAddress() {
         notes:          notes || null,
         items:          cart.map(i => ({ id: i.id, name: i.variant ? i.name + ' - ' + i.variant : i.name, variant: i.variant || null, price: i.price, qty: i.qty })),
         total:          parseFloat(total.toFixed(3)),
+        delivery_fee:   parseFloat(fee.toFixed(3)),
         payment_method: 'cash',
         status:         'new'
       }]);
@@ -580,6 +620,7 @@ async function submitAddress() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         amount:   total.toFixed(3),
+        deliveryFee: parseFloat(fee.toFixed(3)),
         orderRef,
         items:    cart.map(i => ({ id: i.id, name: i.variant ? i.name + ' - ' + i.variant : i.name, variant: i.variant || null, price: i.price, qty: i.qty })),
         customer: { name, phone, address, notes: notes || '' },
@@ -639,6 +680,7 @@ async function loadHeroBanner() {
 updateCartCount();
 loadProducts();
 loadHeroBanner();
+loadDeliveryZones();
 </script>
 </body>
 </html>
