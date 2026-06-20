@@ -308,6 +308,20 @@
     .acc-table th { color: var(--primary); font-weight: 700; font-size: .82rem; }
     .acc-table tbody tr:last-child td { border-bottom: none; }
 
+    /* مصدر البيانات + رفع مبيعات المحل */
+    .acc-source-panel { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: .9rem 1rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: .65rem; }
+    .acc-source-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+    .acc-lbl { font-weight: 700; font-size: .88rem; }
+    .acc-radio { display: inline-flex; align-items: center; gap: .35rem; font-size: .88rem; cursor: pointer; }
+    .acc-radio input { accent-color: var(--accent); }
+    .acc-shop-status { font-size: .82rem; color: var(--text-muted); }
+    .acc-shop-status.ok { color: var(--success); font-weight: 600; }
+    .acc-hint { font-size: .78rem; color: var(--text-muted); margin: 0; line-height: 1.6; }
+    .src-badge { display: inline-block; font-size: .7rem; font-weight: 700; padding: .1rem .4rem; border-radius: 5px; margin-inline-start: .3rem; vertical-align: middle; }
+    .src-site  { background: rgba(52,152,219,.15); color: #2980b9; }
+    .src-shop  { background: rgba(230,126,34,.15); color: #d35400; }
+    .src-total { background: rgba(39,174,96,.15);  color: #1e8449; }
+
     .acc-bar { background: var(--bg); border-radius: 1rem; height: 14px; overflow: hidden; border: 1px solid var(--border); }
     .acc-bar-fill { height: 100%; background: var(--accent); border-radius: 1rem; transition: width .6s ease; }
     .acc-bar-legend { display: flex; justify-content: space-between; font-size: .82rem; margin-top: .5rem; color: var(--text-muted); }
@@ -524,6 +538,23 @@
         (إيرادات، متوسط الطلب، كاش/بطاقة، أكثر المنتجات والمناطق، ومقارنة بالفترة السابقة)
         مع توصيات محددة بالأرقام.
       </p>
+
+      <!-- مصدر البيانات + رفع مبيعات المحل -->
+      <div class="acc-source-panel">
+        <div class="acc-source-row">
+          <span class="acc-lbl">مصدر بيانات التقرير:</span>
+          <label class="acc-radio"><input type="radio" name="accSource" value="site" checked onchange="selectDataSource('site')"> 🌐 الموقع فقط</label>
+          <label class="acc-radio"><input type="radio" name="accSource" value="shop"          onchange="selectDataSource('shop')"> 🏪 المحل فقط</label>
+          <label class="acc-radio"><input type="radio" name="accSource" value="both"          onchange="selectDataSource('both')"> 🔗 الاثنين مدموجين</label>
+        </div>
+        <div class="acc-source-row">
+          <input type="file" id="shopCsvInput" accept=".csv,text/csv" style="display:none" onchange="handleShopCsv(event)">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('shopCsvInput').click()">📤 رفع ملف CSV لمبيعات المحل</button>
+          <button class="btn btn-outline btn-sm" id="shopClearBtn" onclick="clearShopData()" style="display:none">🗑️ مسح بيانات المحل</button>
+          <span id="shopStatus" class="acc-shop-status"></span>
+        </div>
+        <p class="acc-hint">أعمدة الملف المتوقعة: التاريخ، إجمالي البيع، المبالغ المستردة، خصومات، صافي المبيعات، تكلفة البضاعة المباعة، اجمالي الربح، الهامش. تُحفظ البيانات محلياً في المتصفح فلا تحتاج لرفعها كل مرة.</p>
+      </div>
 
       <div class="acc-controls">
         <div class="acc-period">
@@ -975,7 +1006,7 @@ function switchSection(e, name) {
   if (name === 'orders')     loadOrders();
   if (name === 'stats')      loadFullStats();
   if (name === 'banner')     loadBannerPreview();
-  if (name === 'accountant') renderSavedReports();
+  if (name === 'accountant') { renderSavedReports(); renderShopStatus(); }
   if (name === 'categories') loadCategoriesAdmin();
   if (name === 'zones')      loadZonesAdmin();
   if (name === 'discounts')  loadDiscounts();
@@ -1612,6 +1643,155 @@ function selectAccPeriod(p) {
     b.classList.toggle('active', b.dataset.period === p));
 }
 
+/* ── مصدر البيانات + مبيعات المحل (CSV) ── */
+const SHOP_STORE = 'bnw_shop_sales';
+let dataSource = 'site';                      // 'site' | 'shop' | 'both'
+
+function selectDataSource(s) { dataSource = s; }
+
+/* تطبيع الأرقام (أرقام عربية، فواصل آلاف، رموز عملة، أقواس للسالب) */
+function parseNum(v) {
+  if (v == null) return 0;
+  let s = String(v).trim();
+  if (!s) return 0;
+  const neg = /^\(.*\)$/.test(s) || s.includes('-');
+  s = s.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))   // أرقام عربية → لاتينية
+       .replace(/[،,]/g, '')                              // فواصل آلاف
+       .replace(/[^\d.]/g, '');                           // أبقِ الأرقام والنقطة فقط
+  const n = parseFloat(s);
+  if (isNaN(n)) return 0;
+  return neg ? -Math.abs(n) : n;
+}
+
+/* تحويل التاريخ لأي صيغة شائعة إلى ms (يدعم YYYY-MM-DD و DD/MM/YYYY) */
+function parseDate(v) {
+  let s = String(v || '').trim().replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  if (!s) return NaN;
+  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);          // YYYY-MM-DD
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/);            // DD/MM/YYYY
+  if (m) { let y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[2] - 1, +m[1]).getTime(); }
+  const t = Date.parse(s);
+  return isNaN(t) ? NaN : t;
+}
+
+/* مُقسِّم صفّ CSV يحترم علامات الاقتباس */
+function splitCsvLine(line) {
+  const out = []; let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { if (q && line[i + 1] === '"') { cur += '"'; i++; } else q = !q; }
+    else if (c === ',' && !q) { out.push(cur); cur = ''; }
+    else cur += c;
+  }
+  out.push(cur);
+  return out.map(s => s.trim());
+}
+
+/* مطابقة رؤوس الأعمدة العربية إلى مفاتيح ثابتة */
+function mapShopHeader(h) {
+  const t = h.replace(/[ً-ْ]/g, '').replace(/\s+/g, ' ').trim();   // إزالة التشكيل
+  if (/تاريخ/.test(t)) return 'date';
+  if (/مسترد|استرداد|مرتجع/.test(t)) return 'refunds';
+  if (/خص/.test(t)) return 'discounts';
+  if (/صافي/.test(t)) return 'netSales';
+  if (/تكلفة|البضاعة|cogs/i.test(t)) return 'cogs';
+  if (/هامش/.test(t)) return 'margin';
+  if (/اجمالي الربح|إجمالي الربح|الربح/.test(t)) return 'grossProfit';
+  if (/اجمالي|إجمالي|البيع/.test(t)) return 'grossSales';
+  return null;
+}
+
+/* تحليل ملف CSV لمبيعات المحل → مصفوفة صفوف */
+function parseShopCsv(text) {
+  const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) throw new Error('الملف فارغ أو لا يحتوي صفوف بيانات');
+  const headers = splitCsvLine(lines[0]).map(mapShopHeader);
+  if (!headers.includes('date')) throw new Error('لم يُعثر على عمود "التاريخ" في الملف');
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = splitCsvLine(lines[i]);
+    const row = {};
+    headers.forEach((key, j) => { if (key) row[key] = cells[j]; });
+    const ms = parseDate(row.date);
+    if (isNaN(ms)) continue;                       // تجاهل الصفوف بلا تاريخ صالح
+    rows.push({
+      ms,
+      grossSales:  parseNum(row.grossSales),
+      refunds:     parseNum(row.refunds),
+      discounts:   parseNum(row.discounts),
+      netSales:    parseNum(row.netSales),
+      cogs:        parseNum(row.cogs),
+      grossProfit: parseNum(row.grossProfit),
+      margin:      parseNum(row.margin),
+    });
+  }
+  if (!rows.length) throw new Error('لم يُقرأ أي صفّ صالح (تحقّق من صيغة التاريخ)');
+  return rows.sort((a, b) => a.ms - b.ms);
+}
+
+function loadShopData() {
+  try { return JSON.parse(localStorage.getItem(SHOP_STORE) || 'null'); } catch (e) { return null; }
+}
+
+async function handleShopCsv(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';                            // اسمح بإعادة رفع نفس الملف
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const rows = parseShopCsv(text);
+    const payload = { rows, fileName: file.name, uploadedAt: Date.now() };
+    localStorage.setItem(SHOP_STORE, JSON.stringify(payload));
+    renderShopStatus();
+    showToast(`✅ تم تحميل ${rows.length} صفّ من مبيعات المحل`, 'success');
+  } catch (err) {
+    showToast('❌ ' + err.message, 'error');
+  }
+}
+
+function clearShopData() {
+  localStorage.removeItem(SHOP_STORE);
+  renderShopStatus();
+  showToast('🗑️ تم مسح بيانات المحل', 'success');
+}
+
+function renderShopStatus() {
+  const el = document.getElementById('shopStatus');
+  const clr = document.getElementById('shopClearBtn');
+  if (!el) return;
+  const d = loadShopData();
+  if (d && Array.isArray(d.rows) && d.rows.length) {
+    const from = new Date(d.rows[0].ms).toLocaleDateString('ar-KW');
+    const to   = new Date(d.rows[d.rows.length - 1].ms).toLocaleDateString('ar-KW');
+    el.textContent = `📊 ${d.rows.length} صفّ (${from} ← ${to}) — ${d.fileName || 'CSV'}`;
+    el.classList.add('ok');
+    if (clr) clr.style.display = '';
+  } else {
+    el.textContent = 'لا توجد بيانات محل محمّلة بعد.';
+    el.classList.remove('ok');
+    if (clr) clr.style.display = 'none';
+  }
+}
+
+/* تجميع مبيعات المحل ضمن نافذة زمنية */
+function shopMetrics(rows, startMs, endMs) {
+  const inRange = rows.filter(r => r.ms >= startMs && r.ms < endMs);
+  const sum = k => inRange.reduce((s, r) => s + (r[k] || 0), 0);
+  const netSales    = sum('netSales');
+  const grossProfit = sum('grossProfit');
+  return {
+    grossSales:  +sum('grossSales').toFixed(3),
+    refunds:     +sum('refunds').toFixed(3),
+    discounts:   +sum('discounts').toFixed(3),
+    netSales:    +netSales.toFixed(3),
+    cogs:        +sum('cogs').toFixed(3),
+    grossProfit: +grossProfit.toFixed(3),
+    margin:      netSales ? +((grossProfit / netSales) * 100).toFixed(1) : 0,   // هامش مرجّح
+    days:        inRange.length,
+  };
+}
+
 /* توليد تقرير جديد (streaming — يظهر كلمة كلمة) */
 async function generateReport() {
   const btn = document.getElementById('accGenBtn');
@@ -1621,19 +1801,43 @@ async function generateReport() {
     '<div class="orders-empty"><div class="spinner" style="margin:0 auto 1rem"></div><p>المحاسب الذكي يحلّل بياناتك…</p></div>';
 
   try {
-    /* الفرونت (جلسة الأدمن المصادَقة) يجلب طلبات الفترة ويرسلها للدالة */
     const days = accPeriod === 'week' ? 7 : accPeriod === 'quarter' ? 90 : 30;
-    const sinceISO = new Date(Date.now() - 2 * days * 86400000).toISOString();
-    const { data: orders, error } = await supabase
-      .from('orders').select('*')
-      .gte('created_at', sinceISO)
-      .order('created_at', { ascending: false });
-    if (error) throw new Error('تعذّر جلب الطلبات: ' + error.message);
+    const now = Date.now();
+    const curStart = now - days * 86400000;
+    const prevStart = now - 2 * days * 86400000;
+
+    const needSite = dataSource === 'site' || dataSource === 'both';
+    const needShop = dataSource === 'shop' || dataSource === 'both';
+
+    /* المحل: من البيانات المحلية */
+    let shop = null;
+    if (needShop) {
+      const stored = loadShopData();
+      if (!stored || !stored.rows || !stored.rows.length) {
+        throw new Error('لا توجد بيانات محل محمّلة — ارفع ملف CSV أولاً أو اختر "الموقع فقط"');
+      }
+      shop = {
+        current:  shopMetrics(stored.rows, curStart, now),
+        previous: shopMetrics(stored.rows, prevStart, curStart),
+      };
+    }
+
+    /* الموقع: جلسة الأدمن المصادَقة تجلب الطلبات */
+    let orders = [];
+    if (needSite) {
+      const sinceISO = new Date(prevStart).toISOString();
+      const { data, error } = await supabase
+        .from('orders').select('*')
+        .gte('created_at', sinceISO)
+        .order('created_at', { ascending: false });
+      if (error) throw new Error('تعذّر جلب الطلبات: ' + error.message);
+      orders = data || [];
+    }
 
     const resp = await fetch('/api/smart-accountant', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ period: accPeriod, orders: orders || [] }),
+      body:    JSON.stringify({ period: accPeriod, orders, dataSource, shop }),
     });
 
     /* خطأ مبكر (JSON) قبل بدء البثّ */
@@ -1737,64 +1941,124 @@ function renderSavedReports() {
     '</div>';
 }
 
-/* بناء جداول الأرقام (المشترك بين العرض المباشر والبثّ) */
+/* بناء جداول الأرقام (المشترك بين العرض المباشر والبثّ) — واعٍ بمصدر البيانات */
 function accTablesHtml(r) {
-  const c = r.current || {}, ch = r.changes || {};
+  const src     = r.dataSource || 'site';
+  const needSite = src === 'site' || src === 'both';
+  const needShop = src === 'shop' || src === 'both';
+  const c  = r.current || {}, ch = r.changes || {};
+  const shop   = (r.shop && r.shop.current)  ? r.shop.current  : null;
+  const shopPv = (r.shop && r.shop.previous) ? r.shop.previous : null;
+
   const kwd = n => `${(Number(n) || 0).toFixed(3)} د.ك`;
   const arrow = v => v == null ? '—'
     : v > 0 ? `<span style="color:#27ae60">▲ ${v}%</span>`
     : v < 0 ? `<span style="color:#e74c3c">▼ ${Math.abs(v)}%</span>`
     : '0%';
+  const spct = (a, b) => (b > 0 ? +(((a - b) / b) * 100).toFixed(1) : null);
+  const badge = (cls, txt) => `<span class="src-badge src-${cls}">${txt}</span>`;
+  const both = src === 'both';
 
-  const summaryRows = [
-    ['الإيرادات (مكتملة)', kwd(c.revenue),       arrow(ch.revenuePct)],
-    ['إجمالي الطلبات',     c.ordersTotal ?? 0,    arrow(ch.ordersTotalPct)],
-    ['الطلبات المكتملة',   c.ordersCompleted ?? 0,arrow(ch.ordersCompletedPct)],
-    ['متوسط قيمة الطلب',   kwd(c.avgOrderValue),  arrow(ch.avgOrderValuePct)],
-  ].map(([k, v, d]) => `<tr><td>${k}</td><td style="font-weight:700">${v}</td><td>${d}</td></tr>`).join('');
-
-  const totalPay = (c.cashCount || 0) + (c.cardCount || 0);
-  const cashPct = totalPay ? Math.round((c.cashCount / totalPay) * 100) : 0;
-
-  const prodRows = (c.topProducts || []).length
-    ? c.topProducts.map((x, i) => `<tr><td>${i + 1}. ${esc(x.name)}</td><td>${x.qty}</td><td>${kwd(x.revenue)}</td></tr>`).join('')
-    : '<tr><td colspan="3" style="text-align:center;color:var(--text-muted)">لا توجد مبيعات مكتملة</td></tr>';
-
-  const areaRows = (c.topAreas || []).length
-    ? c.topAreas.map((x, i) => `<tr><td>${i + 1}. ${esc(x.area)}</td><td>${x.count} طلب</td></tr>`).join('')
-    : '<tr><td colspan="2" style="text-align:center;color:var(--text-muted)">لا توجد بيانات عناوين</td></tr>';
-
-  return `
+  /* (1) لوحة المصدر — لمن أين كل رقم */
+  const siteRev = Number(c.revenue || 0);
+  const shopRev = shop ? Number(shop.netSales || 0) : 0;
+  let headerHtml;
+  if (both) {
+    headerHtml = `
     <div class="chart-card">
-      <h3>📅 ${esc(r.periodLabel || r.period)}</h3>
+      <h3>🔗 المبيعات حسب المصدر — ${esc(r.periodLabel || r.period)}</h3>
       <table class="acc-table">
-        <thead><tr><th>المؤشر</th><th>القيمة</th><th>مقارنة بالفترة السابقة</th></tr></thead>
-        <tbody>${summaryRows}</tbody>
+        <thead><tr><th>المصدر</th><th>المبيعات / الإيراد</th></tr></thead>
+        <tbody>
+          <tr><td>🌐 الموقع (طلبات مكتملة)</td><td style="font-weight:700">${kwd(siteRev)}</td></tr>
+          <tr><td>🏪 المحل (صافي المبيعات)</td><td style="font-weight:700">${kwd(shopRev)}</td></tr>
+          <tr style="background:rgba(39,174,96,.07)"><td>🔗 الإجمالي المدموج</td><td style="font-weight:800">${kwd(siteRev + shopRev)}</td></tr>
+        </tbody>
       </table>
-    </div>
+    </div>`;
+  } else {
+    const lbl = needShop ? badge('shop', '🏪 المصدر: المحل فقط') : badge('site', '🌐 المصدر: الموقع فقط');
+    headerHtml = `<div class="chart-card" style="padding:.7rem 1rem"><h3 style="margin:0">📅 ${esc(r.periodLabel || r.period)} ${lbl}</h3></div>`;
+  }
 
-    <div class="acc-grid2">
+  /* (2) كتلة الموقع */
+  let siteHtml = '';
+  if (needSite) {
+    const summaryRows = [
+      ['الإيرادات (مكتملة)', kwd(c.revenue),        arrow(ch.revenuePct)],
+      ['إجمالي الطلبات',     c.ordersTotal ?? 0,     arrow(ch.ordersTotalPct)],
+      ['الطلبات المكتملة',   c.ordersCompleted ?? 0, arrow(ch.ordersCompletedPct)],
+      ['متوسط قيمة الطلب',   kwd(c.avgOrderValue),   arrow(ch.avgOrderValuePct)],
+    ].map(([k, v, d]) => `<tr><td>${k}</td><td style="font-weight:700">${v}</td><td>${d}</td></tr>`).join('');
+
+    const totalPay = (c.cashCount || 0) + (c.cardCount || 0);
+    const cashPct = totalPay ? Math.round((c.cashCount / totalPay) * 100) : 0;
+
+    const prodRows = (c.topProducts || []).length
+      ? c.topProducts.map((x, i) => `<tr><td>${i + 1}. ${esc(x.name)}</td><td>${x.qty}</td><td>${kwd(x.revenue)}</td></tr>`).join('')
+      : '<tr><td colspan="3" style="text-align:center;color:var(--text-muted)">لا توجد مبيعات مكتملة</td></tr>';
+
+    const areaRows = (c.topAreas || []).length
+      ? c.topAreas.map((x, i) => `<tr><td>${i + 1}. ${esc(x.area)}</td><td>${x.count} طلب</td></tr>`).join('')
+      : '<tr><td colspan="2" style="text-align:center;color:var(--text-muted)">لا توجد بيانات عناوين</td></tr>';
+
+    siteHtml = `
       <div class="chart-card">
-        <h3>💳 كاش مقابل بطاقة (المكتملة)</h3>
-        <div class="acc-bar"><div class="acc-bar-fill" style="width:${cashPct}%"></div></div>
-        <div class="acc-bar-legend">
-          <span>💵 كاش: ${c.cashCount || 0} (${cashPct}%)</span>
-          <span>💳 بطاقة: ${c.cardCount || 0} (${100 - cashPct}%)</span>
+        <h3>🌐 مؤشرات الموقع ${both ? badge('site', 'موقع') : ''}</h3>
+        <table class="acc-table">
+          <thead><tr><th>المؤشر</th><th>القيمة</th><th>مقارنة بالفترة السابقة</th></tr></thead>
+          <tbody>${summaryRows}</tbody>
+        </table>
+      </div>
+      <div class="acc-grid2">
+        <div class="chart-card">
+          <h3>💳 كاش مقابل بطاقة (الموقع)</h3>
+          <div class="acc-bar"><div class="acc-bar-fill" style="width:${cashPct}%"></div></div>
+          <div class="acc-bar-legend">
+            <span>💵 كاش: ${c.cashCount || 0} (${cashPct}%)</span>
+            <span>💳 بطاقة: ${c.cardCount || 0} (${100 - cashPct}%)</span>
+          </div>
+        </div>
+        <div class="chart-card">
+          <h3>📍 أكثر مناطق التوصيل (الموقع)</h3>
+          <table class="acc-table"><tbody>${areaRows}</tbody></table>
         </div>
       </div>
       <div class="chart-card">
-        <h3>📍 أكثر مناطق التوصيل</h3>
-        <table class="acc-table"><tbody>${areaRows}</tbody></table>
-      </div>
-    </div>
+        <h3>🏆 أكثر 5 منتجات مبيعاً (الموقع)</h3>
+        <table class="acc-table">
+          <thead><tr><th>المنتج</th><th>الكمية</th><th>الإيراد</th></tr></thead>
+          <tbody>${prodRows}</tbody>
+        </table>
+      </div>`;
+  }
 
-    <div class="chart-card">
-      <h3>🏆 أكثر 5 منتجات مبيعاً</h3>
-      <table class="acc-table">
-        <thead><tr><th>المنتج</th><th>الكمية</th><th>الإيراد</th></tr></thead>
-        <tbody>${prodRows}</tbody>
-      </table>
-    </div>`;
+  /* (3) كتلة المحل */
+  let shopHtml = '';
+  if (needShop && shop) {
+    const p = shopPv || {};
+    const shopRows = [
+      ['إجمالي البيع',            kwd(shop.grossSales),  arrow(spct(shop.grossSales,  p.grossSales))],
+      ['المبالغ المستردة',        kwd(shop.refunds),     '—'],
+      ['الخصومات',                kwd(shop.discounts),   '—'],
+      ['صافي المبيعات',           kwd(shop.netSales),    arrow(spct(shop.netSales,    p.netSales))],
+      ['تكلفة البضاعة المباعة',   kwd(shop.cogs),        arrow(spct(shop.cogs,        p.cogs))],
+      ['إجمالي الربح',            kwd(shop.grossProfit), arrow(spct(shop.grossProfit, p.grossProfit))],
+      ['الهامش',                  `${shop.margin}%`,     arrow(spct(shop.margin,      p.margin))],
+      ['أيام مسجّلة في الفترة',   shop.days,             '—'],
+    ].map(([k, v, d]) => `<tr><td>${k}</td><td style="font-weight:700">${v}</td><td>${d}</td></tr>`).join('');
+
+    shopHtml = `
+      <div class="chart-card">
+        <h3>🏪 مؤشرات المحل ${both ? badge('shop', 'محل') : ''}</h3>
+        <table class="acc-table">
+          <thead><tr><th>المؤشر</th><th>القيمة</th><th>مقارنة بالفترة السابقة</th></tr></thead>
+          <tbody>${shopRows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  return headerHtml + siteHtml + shopHtml;
 }
 
 /* أثناء البثّ: الجداول فوراً + حاوية نص حيّة (تُملأ كلمة كلمة) */
