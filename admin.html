@@ -354,7 +354,7 @@
         </div>
 
         <div class="modal-footer" style="margin-top:1rem">
-          <button class="btn btn-accent" id="bannerSaveBtn" onclick="uploadBanner()" disabled>💾 رفع ونشر البنر</button>
+          <button class="btn btn-accent" id="bannerSaveBtn" onclick="uploadBanner()" disabled>💾 تغيير صورة البنر</button>
         </div>
       </div>
     </div>
@@ -832,7 +832,7 @@ async function uploadBanner() {
   } catch (err) {
     showToast('❌ فشل رفع البنر: ' + err.message, 'error');
   } finally {
-    btn.textContent = '💾 رفع ونشر البنر';
+    btn.textContent = '💾 تغيير صورة البنر';
     btn.disabled = false;
   }
 }

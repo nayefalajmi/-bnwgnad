@@ -57,7 +57,11 @@
 <!-- ══ HERO BANNER (صورة كاملة العرض — تُدار من لوحة التحكم) ══ -->
 <section class="hero-banner" id="heroBanner">
   <img id="heroBannerImg" class="hero-banner-img" alt="بن وقناد" style="display:none" />
-  <div class="hero-fallback" id="heroFallback"><h1>☕ بن وقناد</h1></div>
+  <!-- الافتراضي: اللوجو على خلفية الهوية، يظهر حتى يرفع الأدمن صورة بنر -->
+  <div class="hero-default" id="heroDefault">
+    <img src="logo.png" alt="بن وقناد" class="hero-default-logo"
+         onerror="this.style.display='none'" />
+  </div>
 </section>
 
 <!-- ══ SEARCH ══ -->
@@ -534,18 +538,18 @@ const BANNER_FOLDER = 'banners';
 async function loadHeroBanner() {
   try {
     const { data, error } = await supabase.storage.from(BANNER_BUCKET).list(BANNER_FOLDER, { limit: 100 });
-    if (error || !data) return;                      // يبقى الـ fallback
+    if (error || !data) return;                      // يبقى اللوجو الافتراضي
     const file = data.find(f => f.name.startsWith('hero'));
-    if (!file) return;                               // لا يوجد بنر بعد
+    if (!file) return;                               // لا يوجد بنر بعد → اللوجو
     const { data: pub } = supabase.storage.from(BANNER_BUCKET).getPublicUrl(`${BANNER_FOLDER}/${file.name}`);
     const ver = file.updated_at || file.created_at || '';   // كسر الكاش عند التحديث
     const img = document.getElementById('heroBannerImg');
     img.onload = () => {
-      document.getElementById('heroFallback').style.display = 'none';
+      document.getElementById('heroDefault').style.display = 'none';
       img.style.display = 'block';
     };
     img.src = pub.publicUrl + (ver ? `?t=${encodeURIComponent(ver)}` : '');
-  } catch (e) { /* يبقى الـ fallback عند أي خطأ */ }
+  } catch (e) { /* يبقى اللوجو الافتراضي عند أي خطأ */ }
 }
 
 /* ─── Init ─── */
