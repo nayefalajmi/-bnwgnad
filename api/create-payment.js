@@ -100,7 +100,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Payment gateway not configured — check Vercel env vars' });
   }
 
-  const { amount, orderRef, items, customer } = req.body;
+  const { amount, deliveryFee, orderRef, items, customer } = req.body;
 
   if (!amount || Number(amount) <= 0) {
     return res.status(400).json({ error: 'Invalid amount' });
@@ -118,6 +118,7 @@ export default async function handler(req, res) {
     notes:          customer?.notes   || null,
     items:          Array.isArray(items) ? items : [],
     total:          parseFloat(parseFloat(amount).toFixed(3)),
+    delivery_fee:   parseFloat(parseFloat(deliveryFee || 0).toFixed(3)),
     payment_method: 'card',
     status:         'pending_payment',
   });

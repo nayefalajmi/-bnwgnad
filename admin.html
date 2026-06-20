@@ -208,6 +208,24 @@
       border-radius: 1rem; font-size: .75rem; margin: 1px;
     }
 
+    /* رسوم التوصيل */
+    .zone-add-row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+    .zone-add-row input {
+      padding: .6rem .9rem; border: 1.5px solid var(--border); border-radius: 10px;
+      font-family: inherit; font-size: .9rem;
+    }
+    .zone-add-row input[type=text]   { flex: 1; min-width: 180px; }
+    .zone-add-row input[type=number] { width: 130px; }
+    .zone-add-row input:focus { outline: none; border-color: var(--accent); }
+    .zone-list { display: flex; flex-direction: column; gap: .5rem; max-width: 640px; }
+    .zone-item {
+      display: flex; align-items: center; gap: .5rem;
+      background: #fff; border: 1.5px solid var(--border); border-radius: 10px; padding: .55rem .8rem;
+    }
+    .zone-item .zone-name { flex: 1; padding: .45rem .7rem; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: .9rem; }
+    .zone-item .zone-fee  { width: 90px; padding: .45rem .5rem; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: .9rem; }
+    .zone-item input:focus { outline: none; border-color: var(--accent); }
+
     /* محرّر المتغيرات */
     .var-editor { display: flex; flex-direction: column; gap: .45rem; }
     .var-row { display: flex; gap: .45rem; align-items: center; }
@@ -294,6 +312,7 @@
     <div class="sidebar-title">القائمة</div>
     <a href="#" data-section="products" class="active" onclick="switchSection(event,'products')">📦 المنتجات</a>
     <a href="#" data-section="categories" onclick="switchSection(event,'categories')">🏷️ الفئات</a>
+    <a href="#" data-section="zones" onclick="switchSection(event,'zones')">🚚 رسوم التوصيل</a>
     <a href="#" data-section="orders" onclick="switchSection(event,'orders')" style="display:flex;align-items:center">
       📋 الطلبات
       <span class="sidebar-badge" id="ordersBadge" style="display:none">0</span>
@@ -500,6 +519,26 @@
       </div>
 
       <div id="catList" class="cat-manage-list" style="margin-top:1rem">
+        <div class="orders-empty"><div class="spinner" style="margin:0 auto 1rem"></div><p>جاري التحميل…</p></div>
+      </div>
+    </div>
+
+    <!-- ── Delivery Zones ── -->
+    <div id="sec-zones" style="display:none">
+      <div class="admin-header">
+        <h2>🚚 رسوم التوصيل</h2>
+      </div>
+      <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1rem">
+        أضف مناطق التوصيل ورسم كل منطقة. يختار العميل منطقته عند الطلب، ويُضاف الرسم للمجموع تلقائياً.
+      </p>
+
+      <div class="zone-add-row">
+        <input type="text"   id="newZoneName" placeholder="اسم المنطقة…" />
+        <input type="number" id="newZoneFee"  placeholder="الرسم (د.ك)" min="0" step="0.001" />
+        <button class="btn btn-accent" onclick="addZone()">➕ إضافة منطقة</button>
+      </div>
+
+      <div id="zoneList" class="zone-list" style="margin-top:1rem">
         <div class="orders-empty"><div class="spinner" style="margin:0 auto 1rem"></div><p>جاري التحميل…</p></div>
       </div>
     </div>
@@ -821,6 +860,7 @@ function switchSection(e, name) {
   document.getElementById('sec-banner').style.display   = name === 'banner'   ? 'block' : 'none';
   document.getElementById('sec-accountant').style.display = name === 'accountant' ? 'block' : 'none';
   document.getElementById('sec-categories').style.display = name === 'categories' ? 'block' : 'none';
+  document.getElementById('sec-zones').style.display      = name === 'zones'      ? 'block' : 'none';
   document.querySelectorAll('.admin-sidebar a[data-section]').forEach(a =>
     a.classList.toggle('active', a.dataset.section === name));
   if (name === 'orders')     loadOrders();
@@ -828,6 +868,7 @@ function switchSection(e, name) {
   if (name === 'banner')     loadBannerPreview();
   if (name === 'accountant') renderSavedReports();
   if (name === 'categories') loadCategoriesAdmin();
+  if (name === 'zones')      loadZonesAdmin();
 }
 
 function populateCatOptions() {
@@ -1117,6 +1158,68 @@ async function deleteCategory(id) {
   if (error) { showToast('❌ ' + error.message, 'error'); return; }
   await loadCategoriesAdmin();
   showToast('🗑️ تم حذف الفئة', 'success');
+}
+
+/* ════════════════════════════════════════
+   DELIVERY ZONES (رسوم التوصيل)
+════════════════════════════════════════ */
+let zonesList = [];
+
+async function loadZonesAdmin() {
+  const el = document.getElementById('zoneList');
+  const { data, error } = await supabase
+    .from('delivery_zones').select('*').order('sort_order', { ascending: true });
+  if (error) {
+    el.innerHTML = '<div class="orders-empty">تعذّر تحميل المناطق. تأكد أنك شغّلت <code>sql/delivery-zones.sql</code> في Supabase.</div>';
+    return;
+  }
+  zonesList = data || [];
+  if (!zonesList.length) {
+    el.innerHTML = '<div class="orders-empty">لا توجد مناطق بعد. أضف منطقة من الأعلى.</div>';
+    return;
+  }
+  el.innerHTML = zonesList.map(z => `
+    <div class="zone-item" data-id="${z.id}">
+      <input type="text"   class="zone-name" value="${esc(z.name)}" />
+      <input type="number" class="zone-fee"  value="${z.fee}" min="0" step="0.001" />
+      <span style="color:var(--text-muted);font-size:.8rem">د.ك</span>
+      <button class="btn btn-sm btn-accent"  onclick="saveZone(${z.id})">💾</button>
+      <button class="btn btn-sm btn-danger"  onclick="deleteZone(${z.id})">🗑️</button>
+    </div>`).join('');
+}
+
+async function addZone() {
+  const name = document.getElementById('newZoneName').value.trim();
+  const fee  = parseFloat(document.getElementById('newZoneFee').value);
+  if (!name || isNaN(fee) || fee < 0) { showToast('⚠️ اكتب اسم المنطقة والرسم', 'error'); return; }
+  const sort = zonesList.length ? Math.max(...zonesList.map(z => z.sort_order || 0)) + 1 : 1;
+  const { error } = await supabase.from('delivery_zones').insert([{ name, fee, sort_order: sort }]);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  document.getElementById('newZoneName').value = '';
+  document.getElementById('newZoneFee').value  = '';
+  await loadZonesAdmin();
+  showToast('✅ تمت إضافة المنطقة', 'success');
+}
+
+async function saveZone(id) {
+  const row  = document.querySelector(`.zone-item[data-id="${id}"]`);
+  const name = row.querySelector('.zone-name').value.trim();
+  const fee  = parseFloat(row.querySelector('.zone-fee').value);
+  if (!name || isNaN(fee) || fee < 0) { showToast('⚠️ بيانات غير صحيحة', 'error'); return; }
+  const { error } = await supabase.from('delivery_zones').update({ name, fee }).eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  await loadZonesAdmin();
+  showToast('✅ تم الحفظ', 'success');
+}
+
+async function deleteZone(id) {
+  const z = zonesList.find(x => x.id === id);
+  if (!z) return;
+  if (!confirm(`حذف منطقة "${z.name}"؟`)) return;
+  const { error } = await supabase.from('delivery_zones').delete().eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  await loadZonesAdmin();
+  showToast('🗑️ تم حذف المنطقة', 'success');
 }
 
 /* ════════════════════════════════════════
@@ -1569,6 +1672,7 @@ function renderOrderCard(order) {
       <div class="order-address">📍 ${esc(order.address || '—')}</div>
       ${order.notes ? `<div class="order-address">📝 ${esc(order.notes)}</div>` : ''}
       <div class="order-items">${esc(itemsText)}</div>
+      ${order.delivery_fee > 0 ? `<div class="order-address">🚚 رسوم التوصيل: ${parseFloat(order.delivery_fee).toFixed(3)} د.ك</div>` : ''}
       <div class="order-footer">
         <span class="order-total">${total} د.ك</span>
         <span class="order-method">${method}</span>
