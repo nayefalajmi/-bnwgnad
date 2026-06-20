@@ -226,6 +226,20 @@
     .zone-item .zone-fee  { width: 90px; padding: .45rem .5rem; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: .9rem; }
     .zone-item input:focus { outline: none; border-color: var(--accent); }
 
+    /* نظام الولاء */
+    .loyalty-toggle { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; font-weight: 600; font-size: .88rem; }
+    .loyalty-toggle input { width: 18px; height: 18px; cursor: pointer; }
+    .loyalty-settings {
+      display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: center;
+      background: #fff; border: 1.5px solid var(--border); border-radius: 12px;
+      padding: 1rem 1.25rem; margin-bottom: 1.25rem;
+    }
+    .loyalty-field { display: inline-flex; align-items: center; gap: .5rem; font-size: .88rem; font-weight: 600; }
+    .loyalty-field select, .loyalty-field input {
+      padding: .4rem .6rem; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: .85rem;
+    }
+    .loyalty-field select:focus, .loyalty-field input:focus { outline: none; border-color: var(--accent); }
+
     /* أكواد الخصم */
     .disc-add { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
     .disc-add input, .disc-add select {
@@ -337,6 +351,7 @@
     <a href="#" data-section="categories" onclick="switchSection(event,'categories')">🏷️ الفئات</a>
     <a href="#" data-section="zones" onclick="switchSection(event,'zones')">🚚 رسوم التوصيل</a>
     <a href="#" data-section="discounts" onclick="switchSection(event,'discounts')">🎟️ أكواد الخصم</a>
+    <a href="#" data-section="loyalty" onclick="switchSection(event,'loyalty')">🏆 نظام الولاء</a>
     <a href="#" data-section="orders" onclick="switchSection(event,'orders')" style="display:flex;align-items:center">
       📋 الطلبات
       <span class="sidebar-badge" id="ordersBadge" style="display:none">0</span>
@@ -590,6 +605,48 @@
 
       <div id="discList" class="disc-list" style="margin-top:1rem">
         <div class="orders-empty"><div class="spinner" style="margin:0 auto 1rem"></div><p>جاري التحميل…</p></div>
+      </div>
+    </div>
+
+    <!-- ── Loyalty ── -->
+    <div id="sec-loyalty" style="display:none">
+      <div class="admin-header">
+        <h2>🏆 نظام الولاء</h2>
+      </div>
+      <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1rem">
+        النقاط تُضاف عند اكتمال الطلب (على المنتجات بلا توصيل). 100 نقطة = 1 د.ك خصم. تقدر تعدّل نقاط أي زبون يدوياً.
+      </p>
+
+      <div class="loyalty-settings">
+        <label class="loyalty-toggle"><input type="checkbox" id="setEnabled" onchange="setLoyaltySetting('loyalty_enabled', this.checked)" /> تفعيل النظام</label>
+        <label class="loyalty-toggle"><input type="checkbox" id="setShow"    onchange="setLoyaltySetting('loyalty_show', this.checked)" /> إظهار النقاط للزبون</label>
+        <label class="loyalty-toggle"><input type="checkbox" id="setRedeem"  onchange="setLoyaltySetting('loyalty_redeem', this.checked)" /> السماح باستخدام النقاط كخصم</label>
+        <div class="loyalty-field">
+          <span>نوع المكافأة:</span>
+          <select id="setRewardType" onchange="setLoyaltySetting('loyalty_reward_type', this.value)">
+            <option value="points">نقاط لكل د.ك</option>
+            <option value="cashback">كاشباك %</option>
+          </select>
+        </div>
+        <div class="loyalty-field">
+          <span id="earnRateLabel">قيمة الكسب:</span>
+          <input type="number" id="setEarnRate" min="0" step="0.1" onchange="setLoyaltySetting('loyalty_earn_rate', this.value)" style="width:90px" />
+        </div>
+      </div>
+
+      <div class="search-bar" style="margin-bottom:1rem">
+        <input type="text" id="loyaltySearch" placeholder="🔍 ابحث برقم الهاتف…" oninput="renderLoyalty()" />
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>رقم الهاتف</th><th>النقاط</th><th>≈ د.ك</th><th>آخر تحديث</th><th>إجراءات</th></tr>
+          </thead>
+          <tbody id="loyaltyBody">
+            <tr><td colspan="5" style="text-align:center;padding:2rem"><div class="spinner" style="margin:auto"></div></td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -912,6 +969,7 @@ function switchSection(e, name) {
   document.getElementById('sec-categories').style.display = name === 'categories' ? 'block' : 'none';
   document.getElementById('sec-zones').style.display      = name === 'zones'      ? 'block' : 'none';
   document.getElementById('sec-discounts').style.display  = name === 'discounts'  ? 'block' : 'none';
+  document.getElementById('sec-loyalty').style.display    = name === 'loyalty'    ? 'block' : 'none';
   document.querySelectorAll('.admin-sidebar a[data-section]').forEach(a =>
     a.classList.toggle('active', a.dataset.section === name));
   if (name === 'orders')     loadOrders();
@@ -921,6 +979,7 @@ function switchSection(e, name) {
   if (name === 'categories') loadCategoriesAdmin();
   if (name === 'zones')      loadZonesAdmin();
   if (name === 'discounts')  loadDiscounts();
+  if (name === 'loyalty')    loadLoyalty();
 }
 
 function populateCatOptions() {
@@ -1376,6 +1435,111 @@ async function deleteDiscount(id) {
 }
 
 /* ════════════════════════════════════════
+   LOYALTY (نظام الولاء)
+════════════════════════════════════════ */
+let loyaltyList = [];
+
+/* قراءة كل إعدادات الولاء دفعة واحدة */
+async function getLoyaltySettings() {
+  const keys = ['loyalty_enabled','loyalty_show','loyalty_redeem','loyalty_reward_type','loyalty_earn_rate'];
+  const { data } = await supabase.from('app_settings').select('key,value').in('key', keys);
+  const m = {}; (data || []).forEach(r => { m[r.key] = r.value; });
+  return m;
+}
+
+function updateEarnRateLabel() {
+  const t = document.getElementById('setRewardType').value;
+  document.getElementById('earnRateLabel').textContent = t === 'cashback' ? 'نسبة الكاشباك (%):' : 'نقاط لكل د.ك:';
+}
+
+async function setLoyaltySetting(key, value) {
+  const val = typeof value === 'boolean' ? (value ? 'true' : 'false') : String(value);
+  const { error } = await supabase.from('app_settings').upsert({ key, value: val }, { onConflict: 'key' });
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  if (key === 'loyalty_reward_type') updateEarnRateLabel();
+  showToast('✅ تم حفظ الإعداد', 'success');
+}
+
+async function loadLoyalty() {
+  const s = await getLoyaltySettings();
+  document.getElementById('setEnabled').checked  = (s.loyalty_enabled  ?? 'true') === 'true';
+  document.getElementById('setShow').checked      = (s.loyalty_show     ?? 'true') === 'true';
+  document.getElementById('setRedeem').checked    = (s.loyalty_redeem   ?? 'true') === 'true';
+  document.getElementById('setRewardType').value  = s.loyalty_reward_type || 'points';
+  document.getElementById('setEarnRate').value    = s.loyalty_earn_rate  ?? '1';
+  updateEarnRateLabel();
+
+  const { data, error } = await supabase
+    .from('loyalty_points').select('*').order('points', { ascending: false });
+  if (error) {
+    document.getElementById('loyaltyBody').innerHTML =
+      '<tr><td colspan="5" style="text-align:center;padding:1.5rem">تعذّر التحميل — شغّل sql/loyalty.sql في Supabase.</td></tr>';
+    return;
+  }
+  loyaltyList = data || [];
+  renderLoyalty();
+}
+
+function renderLoyalty() {
+  const q = (document.getElementById('loyaltySearch').value || '').trim();
+  const list = q ? loyaltyList.filter(x => (x.customer_phone || '').includes(q)) : loyaltyList;
+  const body = document.getElementById('loyaltyBody');
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1.5rem;color:var(--text-muted)">لا يوجد زبائن بنقاط بعد</td></tr>';
+    return;
+  }
+  body.innerHTML = list.map(x => `
+    <tr data-id="${x.id}">
+      <td dir="ltr" style="text-align:right">${esc(x.customer_phone)}</td>
+      <td><input type="number" class="loy-pts" value="${x.points}" min="0" step="1" style="width:90px;padding:.35rem .5rem;border:1.5px solid var(--border);border-radius:8px;font-family:inherit" /></td>
+      <td style="color:var(--accent);font-weight:700">${(x.points/100).toFixed(2)}</td>
+      <td style="color:var(--text-muted);font-size:.8rem">${x.updated_at ? new Date(x.updated_at).toLocaleDateString('ar-KW') : '—'}</td>
+      <td>
+        <button class="btn btn-sm btn-accent" onclick="saveLoyalty(${x.id})">💾</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteLoyalty(${x.id})">🗑️</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function saveLoyalty(id) {
+  const row = document.querySelector(`#loyaltyBody tr[data-id="${id}"]`);
+  const pts = parseInt(row.querySelector('.loy-pts').value);
+  if (isNaN(pts) || pts < 0) { showToast('⚠️ قيمة غير صحيحة', 'error'); return; }
+  const { error } = await supabase.from('loyalty_points').update({ points: pts, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  await loadLoyalty();
+  showToast('✅ تم حفظ النقاط', 'success');
+}
+
+async function deleteLoyalty(id) {
+  const x = loyaltyList.find(r => r.id === id);
+  if (!x) return;
+  if (!confirm(`حذف نقاط الزبون ${x.customer_phone}؟`)) return;
+  const { error } = await supabase.from('loyalty_points').delete().eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  await loadLoyalty();
+  showToast('🗑️ تم الحذف', 'success');
+}
+
+/* منح النقاط عند اكتمال الطلب (1 د.ك منتجات بلا توصيل = 1 نقطة) */
+async function awardLoyaltyForOrder(order) {
+  try {
+    const s = await getLoyaltySettings();
+    if ((s.loyalty_enabled ?? 'true') !== 'true') return;
+    if (!order || order.points_awarded) return;
+    const phone = (order.customer_phone || '').trim();
+    const spend = parseFloat(order.total || 0) - parseFloat(order.delivery_fee || 0);
+    const rate  = parseFloat(s.loyalty_earn_rate || '1') || 0;   // نقاط/كاشباك لكل د.ك
+    const pts   = Math.floor(Math.max(0, spend) * rate);
+    if (phone && pts > 0) {
+      await supabase.rpc('award_loyalty', { p_phone: phone, p_points: pts });
+    }
+    await supabase.from('orders').update({ points_awarded: true }).eq('id', order.id);
+    order.points_awarded = true;
+  } catch (e) { console.warn('award loyalty failed:', e); }
+}
+
+/* ════════════════════════════════════════
    BANNER (البنر الإعلاني)
 ════════════════════════════════════════ */
 const BANNER_BUCKET = 'product-images';
@@ -1827,6 +1991,7 @@ function renderOrderCard(order) {
       <div class="order-items">${esc(itemsText)}</div>
       ${order.delivery_fee > 0 ? `<div class="order-address">🚚 رسوم التوصيل: ${parseFloat(order.delivery_fee).toFixed(3)} د.ك</div>` : ''}
       ${order.discount_amount > 0 ? `<div class="order-address" style="color:#27ae60">🎟️ خصم${order.discount_code ? ' ('+esc(order.discount_code)+')' : ''}: −${parseFloat(order.discount_amount).toFixed(3)} د.ك</div>` : ''}
+      ${order.loyalty_discount > 0 ? `<div class="order-address" style="color:#27ae60">🏆 نقاط الولاء (${order.loyalty_points_used || 0} نقطة): −${parseFloat(order.loyalty_discount).toFixed(3)} د.ك</div>` : ''}
       <div class="order-footer">
         <span class="order-total">${total} د.ك</span>
         <span class="order-method">${method}</span>
@@ -1840,6 +2005,13 @@ async function setStatus(id, status) {
   const { error } = await supabase.from('orders').update({ status }).eq('id', id);
   if (error) { showToast('❌ فشل تحديث الحالة', 'error'); return; }
   orders = orders.map(o => o.id === id ? { ...o, status } : o);
+
+  /* منح نقاط الولاء عند اكتمال الطلب (مرة واحدة) */
+  if (status === 'completed') {
+    const o = orders.find(x => x.id === id);
+    await awardLoyaltyForOrder(o);
+  }
+
   const newCount = orders.filter(o => o.status === 'new').length;
   lastNewCount = newCount;
   const badge = document.getElementById('ordersBadge');
