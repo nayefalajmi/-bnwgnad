@@ -110,11 +110,31 @@ export default async function handler(req, res) {
   const ref     = orderRef || `ORD-${Date.now()}`;
   const baseUrl = `https://${req.headers.host}`;
 
+  /* IP الزبون من ترويسة الطلب */
+  const xff = req.headers['x-forwarded-for'];
+  const ip  = (xff ? String(xff).split(',')[0].trim() : '') || req.headers['x-real-ip'] || '';
+
+  /* منع إعادة استخدام كود الخصم من نفس الشخص (هاتف/إيميل/IP) */
+  if (discountCode) {
+    try {
+      const chk = await httpsPost(SB_HOST, '/rest/v1/rpc/check_discount',
+        JSON.stringify({ p_code: discountCode, p_phone: customer?.phone || '', p_email: customer?.email || '', p_ip: ip }),
+        { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` });
+      const rows = JSON.parse(chk.body || '[]');
+      const row  = Array.isArray(rows) ? rows[0] : rows;
+      if (row && row.ok && row.used) {
+        return res.status(400).json({ error: 'discount_used', message: 'هذا الكود استُخدم مسبقاً' });
+      }
+    } catch (e) { console.warn('discount check failed:', e.message); }
+  }
+
   /* Save the order (don't block checkout on a save failure) */
   await saveOrder({
     order_ref:       ref,
     customer_name:   customer?.name    || 'غير محدد',
     customer_phone:  customer?.phone   || '',
+    customer_email:  customer?.email   || null,
+    customer_ip:     ip || null,
     address:         customer?.address || '',
     notes:           customer?.notes   || null,
     items:           Array.isArray(items) ? items : [],

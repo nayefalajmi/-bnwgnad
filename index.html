@@ -147,6 +147,10 @@
         </div>
       </div>
       <div class="form-group">
+        <label>الإيميل (اختياري)</label>
+        <input type="email" id="aEmail" placeholder="example@email.com" dir="ltr" />
+      </div>
+      <div class="form-group">
         <label>ملاحظات</label>
         <textarea id="aNotes" rows="2" placeholder="أي تعليمات إضافية للتوصيل…"></textarea>
       </div>
@@ -223,6 +227,7 @@ let allProducts = [];
 let categories  = [];          // الفئات المرتّبة من جدول categories
 let deliveryZones = [];        // مناطق التوصيل ورسومها
 let appliedDiscount = null;    // { code, type, value } عند تطبيق كود خصم
+let clientIp        = '';      // IP الزبون (من الخادم) — يُحفظ على الطلب
 let loyaltyEnabled  = false;   // النظام مفعّل (الكسب)
 let loyaltyShow     = false;   // إظهار النقاط للزبون
 let loyaltyRedeem   = false;   // السماح باستخدام النقاط كخصم
@@ -651,28 +656,56 @@ function computeDiscountAmount(productsTotal) {
   return Math.max(0, amt);
 }
 
-/* تطبيق كود الخصم (عبر RPC آمن) */
+/* تطبيق كود الخصم — عبر الخادم (يكشف إعادة الاستخدام بالهاتف/الإيميل/الـ IP) */
 async function applyDiscount() {
   const input = document.getElementById('aDiscount');
   const msg   = document.getElementById('discountMsg');
   const code  = input.value.trim();
   if (!code) { msg.className = 'discount-msg err'; msg.textContent = 'اكتب كود الخصم'; return; }
+  const phone = (document.getElementById('aPhone').value || '').trim();
+  const email = (document.getElementById('aEmail').value || '').trim();
 
   const btn = document.getElementById('discountBtn');
   btn.disabled = true; btn.textContent = '…';
   try {
-    const { data, error } = await supabase.rpc('validate_discount', { p_code: code });
-    const row = (!error && Array.isArray(data) && data.length) ? data[0] : null;
-    if (!row) {
+    let res = null;
+    try {
+      const resp = await fetch('/api/discount-check', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, phone, email }),
+      });
+      res = await resp.json();
+    } catch (_) { res = null; }
+
+    if (res && res.ip) clientIp = res.ip;
+
+    if (res && res.status === 'used') {
+      appliedDiscount = null;
+      msg.className = 'discount-msg err';
+      msg.textContent = '❌ هذا الكود استُخدم مسبقاً';
+    } else if (res && res.status === 'ok' && res.discount) {
+      appliedDiscount = { code, type: res.discount.type, value: parseFloat(res.discount.value) };
+      const amt = computeDiscountAmount(cart.reduce((s, i) => s + i.price * i.qty, 0));
+      msg.className = 'discount-msg ok';
+      msg.textContent = `✅ تم تطبيق الخصم: −${amt.toFixed(2)} د.ك`;
+    } else if (res && res.status === 'invalid') {
       appliedDiscount = null;
       msg.className = 'discount-msg err';
       msg.textContent = '❌ كود غير صالح أو منتهٍ';
     } else {
-      appliedDiscount = { code: row.code, type: row.discount_type, value: parseFloat(row.discount_value) };
-      const products = cart.reduce((s, i) => s + i.price * i.qty, 0);
-      const amt = computeDiscountAmount(products);
-      msg.className = 'discount-msg ok';
-      msg.textContent = `✅ تم تطبيق الخصم: −${amt.toFixed(2)} د.ك`;
+      /* تعذّر الوصول للخادم — رجوع للتحقق المباشر (الصلاحية فقط، بلا كشف إعادة استخدام) */
+      const { data, error } = await supabase.rpc('validate_discount', { p_code: code });
+      const row = (!error && Array.isArray(data) && data.length) ? data[0] : null;
+      if (!row) {
+        appliedDiscount = null;
+        msg.className = 'discount-msg err';
+        msg.textContent = '❌ كود غير صالح أو منتهٍ';
+      } else {
+        appliedDiscount = { code: row.code, type: row.discount_type, value: parseFloat(row.discount_value) };
+        const amt = computeDiscountAmount(cart.reduce((s, i) => s + i.price * i.qty, 0));
+        msg.className = 'discount-msg ok';
+        msg.textContent = `✅ تم تطبيق الخصم: −${amt.toFixed(2)} د.ك`;
+      }
     }
   } catch (e) {
     appliedDiscount = null;
@@ -806,6 +839,7 @@ function closeAddress() {
 async function submitAddress() {
   const name     = document.getElementById('aName').value.trim();
   const phone    = document.getElementById('aPhone').value.trim();
+  const email    = document.getElementById('aEmail').value.trim();
   const area     = document.getElementById('aArea').value.trim();
   const street   = document.getElementById('aStreet').value.trim();
   const building = document.getElementById('aBuilding').value.trim();
@@ -819,6 +853,26 @@ async function submitAddress() {
 
   const btn = document.getElementById('payBtn');
   btn.disabled = true;
+
+  /* فحص نهائي (خادمي) لكود الخصم + جلب IP الزبون لحفظه على الطلب */
+  try {
+    const resp = await fetch('/api/discount-check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: appliedDiscount ? appliedDiscount.code : '', phone, email }),
+    });
+    const chk = await resp.json();
+    if (chk && chk.ip) clientIp = chk.ip;
+    if (appliedDiscount && chk && chk.status === 'used') {
+      showToast('❌ هذا الكود استُخدم مسبقاً', 'error');
+      appliedDiscount = null;
+      const dMsg = document.getElementById('discountMsg');
+      if (dMsg) { dMsg.className = 'discount-msg err'; dMsg.textContent = '❌ هذا الكود استُخدم مسبقاً'; }
+      btn.disabled = false;
+      selectPayMethod(selectedPayMethod);
+      renderCheckoutSummary();
+      return;
+    }
+  } catch (_) { /* تعذّر الفحص — لا نمنع الطلب */ }
 
   const products    = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const fee         = selectedZoneFee();
@@ -846,6 +900,8 @@ async function submitAddress() {
         order_ref:      orderRef,
         customer_name:  name,
         customer_phone: phone,
+        customer_email: email || null,
+        customer_ip:    clientIp || null,
         address:        address,
         notes:          notes || null,
         items:          cart.map(i => ({ id: i.id, name: i.variant ? i.name + ' - ' + i.variant : i.name, variant: i.variant || null, price: i.price, qty: i.qty })),
@@ -881,7 +937,7 @@ async function submitAddress() {
         loyaltyDiscount:   parseFloat(loyaltyDisc.toFixed(3)),
         orderRef,
         items:    cart.map(i => ({ id: i.id, name: i.variant ? i.name + ' - ' + i.variant : i.name, variant: i.variant || null, price: i.price, qty: i.qty })),
-        customer: { name, phone, address, notes: notes || '' },
+        customer: { name, phone, email: email || '', address, notes: notes || '' },
       }),
     });
     const data = await resp.json();
@@ -893,8 +949,16 @@ async function submitAddress() {
       return;
     }
 
-    console.error('Payment init failed:', data);
-    showToast('⚠️ تعذّر بدء الدفع، حاول مرة أخرى', 'error');
+    if (data && data.error === 'discount_used') {
+      appliedDiscount = null;
+      const dMsg = document.getElementById('discountMsg');
+      if (dMsg) { dMsg.className = 'discount-msg err'; dMsg.textContent = '❌ هذا الكود استُخدم مسبقاً'; }
+      showToast('❌ هذا الكود استُخدم مسبقاً', 'error');
+      renderCheckoutSummary();
+    } else {
+      console.error('Payment init failed:', data);
+      showToast('⚠️ تعذّر بدء الدفع، حاول مرة أخرى', 'error');
+    }
   } catch (e) {
     console.error('Payment request error:', e);
     showToast('⚠️ خطأ في الاتصال، حاول مرة أخرى', 'error');
