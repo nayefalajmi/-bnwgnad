@@ -29,6 +29,47 @@ body {
 }
 
 /* ══════════════════════════════
+   PROMO BANNER (marquee)
+══════════════════════════════ */
+.promo-bar {
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
+  color: #fff;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: .5rem 0;
+  direction: ltr;                 /* يثبّت المسار من اليسار (مهم في صفحة RTL) */
+}
+.promo-track {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: promoScroll 26s linear infinite;
+}
+.promo-group {
+  display: flex;
+  align-items: center;
+  gap: 3rem;
+  padding-left: 3rem;             /* فاصل ثابت بين كل تكرار */
+  flex-shrink: 0;
+}
+.promo-item {
+  flex-shrink: 0;
+  direction: rtl;                 /* النص العربي يُعرض بشكله الصحيح داخل كل عنصر */
+  font-size: .9rem;
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+/* الحركة من اليمين لليسار */
+@keyframes promoScroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.promo-bar:hover .promo-track { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .promo-track { animation: none; transform: none; }
+}
+
+/* ══════════════════════════════
    NAVBAR
 ══════════════════════════════ */
 .navbar {
@@ -123,16 +164,27 @@ body {
 }
 
 /* ══════════════════════════════
-   HERO
+   HERO BANNER (صورة كاملة العرض)
 ══════════════════════════════ */
-.hero {
+.hero-banner {
+  width: 100%;
+  line-height: 0;
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 55%, var(--accent) 100%);
+}
+.hero-banner-img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+/* يظهر عندما لا توجد صورة بنر مرفوعة بعد */
+.hero-fallback {
   color: #fff;
   text-align: center;
   padding: 3.5rem 2rem 3rem;
+  line-height: 1.3;
 }
-.hero h1 { font-size: 2.4rem; margin-bottom: .5rem; }
-.hero p  { font-size: 1.05rem; opacity: .82; }
+.hero-fallback h1 { font-size: 2.4rem; margin-bottom: .5rem; }
+.hero-fallback p  { font-size: 1.05rem; opacity: .82; }
 
 /* ══════════════════════════════
    STORE SEARCH
@@ -993,7 +1045,7 @@ tbody td { padding: .6rem 1rem; font-size: .86rem; vertical-align: middle; }
   .admin-sidebar .sidebar-title { display: none; }
   .admin-sidebar a { padding: .5rem .9rem; white-space: nowrap; }
   .admin-main      { padding: 1.25rem; }
-  .hero h1         { font-size: 1.8rem; }
+  .hero-fallback h1 { font-size: 1.8rem; }
   .form-row        { grid-template-columns: 1fr; }
   .addr-row        { grid-template-columns: 1fr; }
   .cart-sidebar    { width: 100%; }

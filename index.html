@@ -14,6 +14,28 @@
 </head>
 <body>
 
+<!-- ══ PROMO BANNER (marquee) ══
+     لتعديل العروض/الرسائل: غيّر النصوص في المجموعة الأولى،
+     ثم انسخها كما هي في المجموعة الثانية (التكرار ضروري لحركة سلسة بلا فراغ). -->
+<div class="promo-bar" aria-label="عروض وأخبار بن وقناد">
+  <div class="promo-track">
+    <!-- المجموعة 1 -->
+    <div class="promo-group">
+      <span class="promo-item">🎉 أهلاً بكم في بن وقناد</span>
+      <span class="promo-item">🚚 توصيل لجميع مناطق الكويت</span>
+      <span class="promo-item">☕ أجود أنواع البن والقهوة العربية</span>
+      <span class="promo-item">🌟 منتجات طازجة تصلك يومياً</span>
+    </div>
+    <!-- المجموعة 2 (نسخة مطابقة) -->
+    <div class="promo-group" aria-hidden="true">
+      <span class="promo-item">🎉 أهلاً بكم في بن وقناد</span>
+      <span class="promo-item">🚚 توصيل لجميع مناطق الكويت</span>
+      <span class="promo-item">☕ أجود أنواع البن والقهوة العربية</span>
+      <span class="promo-item">🌟 منتجات طازجة تصلك يومياً</span>
+    </div>
+  </div>
+</div>
+
 <!-- ══ NAVBAR ══ -->
 <header class="navbar">
   <a href="index.html" class="navbar-brand">
@@ -32,9 +54,10 @@
   </div>
 </header>
 
-<!-- ══ HERO ══ -->
-<section class="hero">
-  <h1>☕ بن وقناد</h1>
+<!-- ══ HERO BANNER (صورة كاملة العرض — تُدار من لوحة التحكم) ══ -->
+<section class="hero-banner" id="heroBanner">
+  <img id="heroBannerImg" class="hero-banner-img" alt="بن وقناد" style="display:none" />
+  <div class="hero-fallback" id="heroFallback"><h1>☕ بن وقناد</h1></div>
 </section>
 
 <!-- ══ SEARCH ══ -->
@@ -504,9 +527,31 @@ function showToast(msg, type='') {
   t._timer = setTimeout(() => t.classList.remove('show'), 2800);
 }
 
+/* ─── Hero banner (من Supabase Storage) ─── */
+const BANNER_BUCKET = 'product-images';
+const BANNER_FOLDER = 'banners';
+
+async function loadHeroBanner() {
+  try {
+    const { data, error } = await supabase.storage.from(BANNER_BUCKET).list(BANNER_FOLDER, { limit: 100 });
+    if (error || !data) return;                      // يبقى الـ fallback
+    const file = data.find(f => f.name.startsWith('hero'));
+    if (!file) return;                               // لا يوجد بنر بعد
+    const { data: pub } = supabase.storage.from(BANNER_BUCKET).getPublicUrl(`${BANNER_FOLDER}/${file.name}`);
+    const ver = file.updated_at || file.created_at || '';   // كسر الكاش عند التحديث
+    const img = document.getElementById('heroBannerImg');
+    img.onload = () => {
+      document.getElementById('heroFallback').style.display = 'none';
+      img.style.display = 'block';
+    };
+    img.src = pub.publicUrl + (ver ? `?t=${encodeURIComponent(ver)}` : '');
+  } catch (e) { /* يبقى الـ fallback عند أي خطأ */ }
+}
+
 /* ─── Init ─── */
 updateCartCount();
 loadProducts();
+loadHeroBanner();
 </script>
 </body>
 </html>
