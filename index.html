@@ -192,6 +192,14 @@
   </div>
 </div>
 
+<!-- ══ PRODUCT DETAIL MODAL ══ -->
+<div class="modal-overlay" id="productOverlay" onclick="if(event.target===this)closeProduct()">
+  <div class="modal product-modal" style="max-width:480px">
+    <button class="modal-close" onclick="closeProduct()" aria-label="إغلاق">✕</button>
+    <div id="productModalBody"></div>
+  </div>
+</div>
+
 <!-- ══ TOAST ══ -->
 <div class="toast" id="toast"></div>
 
@@ -317,6 +325,9 @@ function renderProducts(list) {
       ? `<img src="${p.image_url}" alt="${p.Name}" loading="lazy" />`
       : `<img src="logo.png" alt="${p.Name}" loading="lazy" class="product-img-logo" />`;
 
+    const descHtml = p.Description
+      ? `<p class="product-desc" onclick="openProduct(${p.id})">${p.Description}</p>` : '';
+
     const variants = Array.isArray(p.variants) ? p.variants.filter(v => v && v.label) : [];
     if (variants.length) {
       const first = parseFloat(variants[0].price || 0).toFixed(2);
@@ -324,8 +335,9 @@ function renderProducts(list) {
         `<option value="${i}">${v.label}</option>`).join('');
       return `
       <div class="product-card" id="card-${p.id}">
-        <div class="product-img-wrap">${imgHtml}</div>
-        <h3>${p.Name}</h3>
+        <div class="product-img-wrap" onclick="openProduct(${p.id})">${imgHtml}</div>
+        <h3 onclick="openProduct(${p.id})">${p.Name}</h3>
+        ${descHtml}
         <select class="variant-sel" id="vsel-${p.id}" onchange="onVariantChange(${p.id})">${opts}</select>
         <div class="price-row">
           <p class="price"><span id="vprice-${p.id}">${first}</span> <span>د.ك</span></p>
@@ -337,8 +349,9 @@ function renderProducts(list) {
     const price = parseFloat(p.Price||0).toFixed(2);
     return `
     <div class="product-card" id="card-${p.id}">
-      <div class="product-img-wrap">${imgHtml}</div>
-      <h3>${p.Name}</h3>
+      <div class="product-img-wrap" onclick="openProduct(${p.id})">${imgHtml}</div>
+      <h3 onclick="openProduct(${p.id})">${p.Name}</h3>
+      ${descHtml}
       <div class="price-row">
         <p class="price">${price} <span>د.ك</span></p>
         <div class="card-qty-ctrl" id="cardqty-${p.id}">${cardQtyHtml(p.id)}</div>
@@ -374,6 +387,91 @@ function addVariant(id) {
   renderCartItems();
   trackAddToCart({ id: p.id, name: `${p.Name} - ${v.label}`, price });
   showToast(`✅ أُضيف للسلة: ${v.label}`);
+}
+
+/* ════════════════════════════
+   PRODUCT DETAIL MODAL (صفحة المنتج)
+════════════════════════════ */
+function openProduct(id) {
+  const p = allProducts.find(x => x.id === id);
+  if (!p) return;
+  const imgHtml = p.image_url
+    ? `<img src="${p.image_url}" alt="${p.Name}" />`
+    : `<img src="logo.png" alt="${p.Name}" class="product-img-logo" />`;
+
+  const variants = Array.isArray(p.variants) ? p.variants.filter(v => v && v.label) : [];
+  const startPrice = variants.length
+    ? parseFloat(variants[0].price || 0)
+    : parseFloat(p.Price || 0);
+
+  const variantsHtml = variants.length ? `
+    <div class="pd-variants">
+      <label>اختر الخيار</label>
+      <select id="pdvsel" onchange="pdVariantChange(${p.id})">
+        ${variants.map((v, i) =>
+          `<option value="${i}">${v.label} — ${parseFloat(v.price || 0).toFixed(2)} د.ك</option>`).join('')}
+      </select>
+    </div>` : '';
+
+  const descHtml = p.Description ? `<p class="pd-desc">${p.Description}</p>` : '';
+
+  document.getElementById('productModalBody').innerHTML = `
+    <div class="pd-img">${imgHtml}</div>
+    <h3 class="pd-name">${p.Name}</h3>
+    ${descHtml}
+    ${variantsHtml}
+    <div class="pd-price-row">
+      <p class="pd-price"><span id="pdprice">${startPrice.toFixed(2)}</span> <span class="unit">د.ك</span></p>
+      <button class="btn btn-accent" onclick="pdAdd(${p.id})">🛒 أضف للسلة</button>
+    </div>`;
+
+  document.getElementById('productOverlay').classList.add('open');
+}
+
+function closeProduct() {
+  document.getElementById('productOverlay').classList.remove('open');
+}
+
+/* تغيّر المتغيّر داخل صفحة المنتج → حدّث السعر */
+function pdVariantChange(id) {
+  const sel = document.getElementById('pdvsel');
+  const p = allProducts.find(x => x.id === id);
+  if (!sel || !p) return;
+  const v = (p.variants || [])[Number(sel.value)];
+  const el = document.getElementById('pdprice');
+  if (v && el) el.textContent = parseFloat(v.price || 0).toFixed(2);
+}
+
+/* إضافة المنتج (مع المتغيّر المختار إن وُجد) للسلة من صفحة المنتج */
+function pdAdd(id) {
+  const p = allProducts.find(x => x.id === id);
+  if (!p) return;
+  const sel = document.getElementById('pdvsel');
+  const variants = Array.isArray(p.variants) ? p.variants.filter(v => v && v.label) : [];
+
+  if (variants.length) {
+    const v = variants[Number(sel ? sel.value : 0)] || variants[0];
+    const price = parseFloat(v.price || 0);
+    const key = cartKey(id, v.label);
+    const existing = cartFind(key);
+    if (existing) existing.qty++;
+    else cart.push({ key, id: p.id, name: p.Name, variant: v.label, price,
+                     image: p.image_url || null, icon: getIcon(p.Name, p.Category), qty: 1 });
+    trackAddToCart({ id: p.id, name: `${p.Name} - ${v.label}`, price });
+    showToast(`✅ أُضيف للسلة: ${v.label}`);
+  } else {
+    const price = parseFloat(p.Price || 0);
+    const existing = cartFind(String(id));
+    if (existing) existing.qty++;
+    else cart.push({ key: String(id), id: p.id, name: p.Name, variant: null, price,
+                     image: p.image_url || null, icon: getIcon(p.Name, p.Category), qty: 1 });
+    refreshCardQty(id);
+    trackAddToCart({ id: p.id, name: p.Name, price });
+    showToast('✅ أُضيف للسلة');
+  }
+  saveCart();
+  renderCartItems();
+  closeProduct();
 }
 
 /* Returns the correct HTML for a card's qty control (منتجات بلا متغيّرات) */

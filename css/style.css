@@ -392,6 +392,53 @@ body {
 }
 .product-card .price span { font-size: .7rem; font-weight: 400; }
 
+/* الوصف التسويقي تحت الاسم (سطران كحدّ أقصى) */
+.product-desc {
+  font-size: .72rem;
+  color: var(--text-muted);
+  padding: .2rem .55rem 0;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* العناصر القابلة للنقر لفتح صفحة المنتج */
+.product-card .product-img-wrap,
+.product-card h3 { cursor: pointer; }
+
+/* ══ نافذة تفاصيل المنتج ══ */
+.product-modal { position: relative; text-align: right; }
+.modal-close {
+  position: absolute; top: .6rem; left: .6rem;
+  background: var(--bg); border: 1px solid var(--border);
+  width: 32px; height: 32px; border-radius: 50%;
+  cursor: pointer; font-size: .85rem; color: var(--text);
+  display: flex; align-items: center; justify-content: center; z-index: 2;
+}
+.modal-close:hover { background: var(--border); }
+.pd-img {
+  width: 100%; aspect-ratio: 1 / 1; border-radius: 12px;
+  overflow: hidden; background: var(--bg); margin-bottom: 1rem;
+  display: flex; align-items: center; justify-content: center;
+}
+.pd-img img { width: 100%; height: 100%; object-fit: cover; }
+.pd-img img.product-img-logo { object-fit: contain; padding: 18%; opacity: .85; }
+.pd-name { font-size: 1.15rem; color: var(--primary); margin-bottom: .5rem; font-weight: 700; }
+.pd-desc { font-size: .9rem; color: var(--text); line-height: 1.85; margin-bottom: 1rem; white-space: pre-line; }
+.pd-variants { margin-bottom: 1rem; }
+.pd-variants label { display: block; font-size: .85rem; font-weight: 600; margin-bottom: .35rem; }
+.pd-variants select {
+  width: 100%; padding: .55rem .6rem; border: 1.5px solid var(--border);
+  border-radius: 8px; font-family: inherit; font-size: .9rem;
+  background: #fff; color: var(--text); cursor: pointer;
+}
+.pd-variants select:focus { outline: none; border-color: var(--accent); }
+.pd-price-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: .5rem; }
+.pd-price { font-size: 1.4rem; font-weight: 800; color: var(--accent); white-space: nowrap; }
+.pd-price .unit { font-size: .85rem; font-weight: 400; }
+.pd-price-row .btn { flex: 1; }
+
 .add-btn {
   background: var(--primary);
   color: #fff;
