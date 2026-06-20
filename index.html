@@ -150,6 +150,15 @@
         <label>ملاحظات</label>
         <textarea id="aNotes" rows="2" placeholder="أي تعليمات إضافية للتوصيل…"></textarea>
       </div>
+
+      <div class="form-group">
+        <label>كود الخصم (اختياري)</label>
+        <div class="discount-row">
+          <input type="text" id="aDiscount" placeholder="اكتب الكود…" />
+          <button type="button" class="btn btn-outline" id="discountBtn" onclick="applyDiscount()">تطبيق</button>
+        </div>
+        <p class="discount-msg" id="discountMsg"></p>
+      </div>
     </div>
 
     <!-- Order summary inside modal -->
@@ -197,6 +206,7 @@ function getIcon(name, cat) {
 let allProducts = [];
 let categories  = [];          // الفئات المرتّبة من جدول categories
 let deliveryZones = [];        // مناطق التوصيل ورسومها
+let appliedDiscount = null;    // { code, type, value, amount } عند تطبيق كود خصم
 let activeCat   = 'all';       // 'all' أو معرّف فئة (id)
 let searchTerm  = '';
 let cart = JSON.parse(localStorage.getItem('bnwgnad_cart') || '[]');
@@ -520,11 +530,55 @@ function selectedZoneFee() {
   return opt ? parseFloat(opt.dataset.fee || 0) : 0;
 }
 
-/* ملخّص الطلب داخل نموذج العنوان (منتجات + توصيل + الكلّي) */
+/* احسب مبلغ الخصم على إجمالي المنتجات (لا يشمل التوصيل) */
+function computeDiscountAmount(productsTotal) {
+  if (!appliedDiscount) return 0;
+  let amt = appliedDiscount.type === 'percent'
+    ? productsTotal * (appliedDiscount.value / 100)
+    : appliedDiscount.value;
+  amt = Math.min(amt, productsTotal);          // لا يتجاوز قيمة المنتجات
+  return Math.max(0, amt);
+}
+
+/* تطبيق كود الخصم (عبر RPC آمن) */
+async function applyDiscount() {
+  const input = document.getElementById('aDiscount');
+  const msg   = document.getElementById('discountMsg');
+  const code  = input.value.trim();
+  if (!code) { msg.className = 'discount-msg err'; msg.textContent = 'اكتب كود الخصم'; return; }
+
+  const btn = document.getElementById('discountBtn');
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const { data, error } = await supabase.rpc('validate_discount', { p_code: code });
+    const row = (!error && Array.isArray(data) && data.length) ? data[0] : null;
+    if (!row) {
+      appliedDiscount = null;
+      msg.className = 'discount-msg err';
+      msg.textContent = '❌ كود غير صالح أو منتهٍ';
+    } else {
+      appliedDiscount = { code: row.code, type: row.discount_type, value: parseFloat(row.discount_value) };
+      const products = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const amt = computeDiscountAmount(products);
+      msg.className = 'discount-msg ok';
+      msg.textContent = `✅ تم تطبيق الخصم: −${amt.toFixed(2)} د.ك`;
+    }
+  } catch (e) {
+    appliedDiscount = null;
+    msg.className = 'discount-msg err';
+    msg.textContent = '❌ تعذّر التحقق من الكود';
+  } finally {
+    btn.disabled = false; btn.textContent = 'تطبيق';
+    renderCheckoutSummary();
+  }
+}
+
+/* ملخّص الطلب داخل نموذج العنوان (منتجات + خصم + توصيل + الكلّي) */
 function renderCheckoutSummary() {
   const products = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const fee   = selectedZoneFee();
-  const grand = products + fee;
+  const fee      = selectedZoneFee();
+  const discount = computeDiscountAmount(products);
+  const grand    = products - discount + fee;
   document.getElementById('addrSummary').innerHTML = `
     <div class="addr-summary-box">
       <p class="addr-summary-title">ملخص الطلب</p>
@@ -535,6 +589,7 @@ function renderCheckoutSummary() {
         </div>`
       ).join('')}
       <div class="addr-summary-row"><span>المنتجات</span><span>${products.toFixed(2)} د.ك</span></div>
+      ${discount > 0 ? `<div class="addr-summary-row" style="color:var(--success)"><span>الخصم (${appliedDiscount.code})</span><span>−${discount.toFixed(2)} د.ك</span></div>` : ''}
       <div class="addr-summary-row"><span>التوصيل</span><span>${fee.toFixed(2)} د.ك</span></div>
       <div class="addr-summary-total">
         <span>المجموع الكلي</span>
@@ -545,6 +600,11 @@ function renderCheckoutSummary() {
 
 function startCheckout() {
   if (!cart.length) return;
+
+  /* إعادة ضبط كود الخصم */
+  appliedDiscount = null;
+  const dInput = document.getElementById('aDiscount'); if (dInput) dInput.value = '';
+  const dMsg = document.getElementById('discountMsg'); if (dMsg) dMsg.textContent = '';
 
   renderCheckoutSummary();
 
@@ -584,9 +644,15 @@ async function submitAddress() {
 
   const products = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const fee      = selectedZoneFee();
-  const total    = products + fee;
+  const discount = computeDiscountAmount(products);
+  const total    = products - discount + fee;
   const orderRef = 'ORD-' + Date.now();
   const address  = `${area}، ${street}، ${building}${flat ? ' ش'+flat : ''}`;
+
+  /* استهلاك كود الخصم (ذرّياً عبر RPC) */
+  if (appliedDiscount && discount > 0) {
+    try { await supabase.rpc('redeem_discount', { p_code: appliedDiscount.code }); } catch (e) {}
+  }
 
   /* ── كاش: أكّد الطلب مباشرة ── */
   if (selectedPayMethod === 'cash') {
@@ -601,6 +667,8 @@ async function submitAddress() {
         items:          cart.map(i => ({ id: i.id, name: i.variant ? i.name + ' - ' + i.variant : i.name, variant: i.variant || null, price: i.price, qty: i.qty })),
         total:          parseFloat(total.toFixed(3)),
         delivery_fee:   parseFloat(fee.toFixed(3)),
+        discount_code:   appliedDiscount && discount > 0 ? appliedDiscount.code : null,
+        discount_amount: parseFloat(discount.toFixed(3)),
         payment_method: 'cash',
         status:         'new'
       }]);
@@ -621,6 +689,8 @@ async function submitAddress() {
       body: JSON.stringify({
         amount:   total.toFixed(3),
         deliveryFee: parseFloat(fee.toFixed(3)),
+        discountCode:   appliedDiscount && discount > 0 ? appliedDiscount.code : null,
+        discountAmount: parseFloat(discount.toFixed(3)),
         orderRef,
         items:    cart.map(i => ({ id: i.id, name: i.variant ? i.name + ' - ' + i.variant : i.name, variant: i.variant || null, price: i.price, qty: i.qty })),
         customer: { name, phone, address, notes: notes || '' },
