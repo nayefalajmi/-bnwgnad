@@ -343,6 +343,12 @@
     .acc-radio input { accent-color: var(--accent); }
     .acc-shop-status { font-size: .82rem; color: var(--text-muted); }
     .acc-shop-status.ok { color: var(--success); font-weight: 600; }
+    .acc-shop-stores { display: flex; flex-direction: column; gap: .4rem; }
+    .shop-store-item { display: flex; align-items: center; gap: .6rem; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: .45rem .65rem; font-size: .82rem; }
+    .shop-store-item input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+    .shop-store-name { font-weight: 700; color: var(--primary); }
+    .shop-store-meta { color: var(--text-muted); font-size: .76rem; margin-inline-start: auto; white-space: nowrap; }
+    .shop-store-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: .9rem; flex-shrink: 0; }
     .acc-hint { font-size: .78rem; color: var(--text-muted); margin: 0; line-height: 1.6; }
     .src-badge { display: inline-block; font-size: .7rem; font-weight: 700; padding: .1rem .4rem; border-radius: 5px; margin-inline-start: .3rem; vertical-align: middle; }
     .src-site  { background: rgba(52,152,219,.15); color: #2980b9; }
@@ -576,12 +582,12 @@
           <label class="acc-radio"><input type="radio" name="accSource" value="both"          onchange="selectDataSource('both')"> 🔗 الاثنين مدموجين</label>
         </div>
         <div class="acc-source-row">
-          <input type="file" id="shopCsvInput" accept=".csv,text/csv" style="display:none" onchange="handleShopCsv(event)">
-          <button class="btn btn-outline btn-sm" onclick="document.getElementById('shopCsvInput').click()">📤 رفع ملف CSV لمبيعات المحل</button>
-          <button class="btn btn-outline btn-sm" id="shopClearBtn" onclick="clearShopData()" style="display:none">🗑️ مسح بيانات المحل</button>
-          <span id="shopStatus" class="acc-shop-status"></span>
+          <input type="file" id="shopCsvInput" accept=".csv,text/csv" multiple style="display:none" onchange="handleShopCsv(event)">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('shopCsvInput').click()">📤 رفع ملفات CSV (متجر أو أكثر)</button>
+          <button class="btn btn-outline btn-sm" id="shopClearBtn" onclick="clearShopData()" style="display:none">🗑️ مسح كل المتاجر</button>
         </div>
-        <p class="acc-hint">أعمدة الملف المتوقعة: التاريخ، إجمالي البيع، المبالغ المستردة، خصومات، صافي المبيعات، تكلفة البضاعة المباعة، اجمالي الربح، الهامش. تُحفظ البيانات محلياً في المتصفح فلا تحتاج لرفعها كل مرة.</p>
+        <div id="shopStores" class="acc-shop-stores"></div>
+        <p class="acc-hint">يمكنك رفع عدة ملفات معاً؛ كل ملف يظهر كمتجر منفصل باسمه. حدّد المتاجر التي تريد دمجها في التقرير. يقرأ التقرير كامل الفترة الموجودة في الملف بغضّ النظر عن الفترة المختارة. الأعمدة المتوقعة: التاريخ، إجمالي البيع، المبالغ المستردة، خصومات، صافي المبيعات، تكلفة البضاعة المباعة، اجمالي الربح، الهامش.</p>
       </div>
 
       <div class="acc-controls">
@@ -1286,7 +1292,7 @@ function switchSection(e, name) {
   if (name === 'orders')     loadOrders();
   if (name === 'stats')      loadFullStats();
   if (name === 'banner')     loadBannerPreview();
-  if (name === 'accountant') { renderSavedReports(); renderShopStatus(); }
+  if (name === 'accountant') { renderSavedReports(); renderShopStores(); }
   if (name === 'categories') loadCategoriesAdmin();
   if (name === 'zones')      loadZonesAdmin();
   if (name === 'discounts')  loadDiscounts();
@@ -1928,8 +1934,8 @@ function selectAccPeriod(p) {
     b.classList.toggle('active', b.dataset.period === p));
 }
 
-/* ── مصدر البيانات + مبيعات المحل (CSV) ── */
-const SHOP_STORE = 'bnw_shop_sales';
+/* ── مصدر البيانات + مبيعات المتاجر (CSV، عدة متاجر) ── */
+const SHOP_STORES = 'bnw_shop_stores';        // مصفوفة متاجر [{id,name,rows,uploadedAt,selected}]
 let dataSource = 'site';                      // 'site' | 'shop' | 'both'
 
 function selectDataSource(s) { dataSource = s; }
@@ -2037,51 +2043,86 @@ function parseShopCsv(text) {
   return rows.sort((a, b) => a.ms - b.ms);
 }
 
-function loadShopData() {
-  try { return JSON.parse(localStorage.getItem(SHOP_STORE) || 'null'); } catch (e) { return null; }
+/* قراءة المتاجر (مع ترحيل الصيغة القديمة ذات المتجر الواحد) */
+function loadShopStores() {
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem(SHOP_STORES) || '[]'); } catch (e) { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+  if (!arr.length) {                                 // ترحيل bnw_shop_sales القديم
+    try {
+      const old = JSON.parse(localStorage.getItem('bnw_shop_sales') || 'null');
+      if (old && Array.isArray(old.rows) && old.rows.length) {
+        arr = [{ id: 'sh-' + Date.now(), name: old.fileName || 'متجر', rows: old.rows, uploadedAt: old.uploadedAt || Date.now(), selected: true }];
+        localStorage.setItem(SHOP_STORES, JSON.stringify(arr));
+        localStorage.removeItem('bnw_shop_sales');
+      }
+    } catch (e) {}
+  }
+  return arr;
 }
+function saveShopStores(arr) { localStorage.setItem(SHOP_STORES, JSON.stringify(arr)); }
 
 async function handleShopCsv(ev) {
-  const file = ev.target.files && ev.target.files[0];
-  ev.target.value = '';                            // اسمح بإعادة رفع نفس الملف
-  if (!file) return;
-  try {
-    const text = await file.text();
-    const rows = parseShopCsv(text);
-    const payload = { rows, fileName: file.name, uploadedAt: Date.now() };
-    localStorage.setItem(SHOP_STORE, JSON.stringify(payload));
-    renderShopStatus();
-    showToast(`✅ تم تحميل ${rows.length} صفّ من مبيعات المحل`, 'success');
-  } catch (err) {
-    showToast('❌ ' + err.message, 'error');
+  const files = Array.from(ev.target.files || []);
+  ev.target.value = '';                              // اسمح بإعادة رفع نفس الملف
+  if (!files.length) return;
+  const stores = loadShopStores();
+  let added = 0, errors = [];
+  for (const file of files) {
+    try {
+      const rows = parseShopCsv(await file.text());
+      const name = file.name.replace(/\.csv$/i, '');
+      stores.push({ id: 'sh-' + Date.now() + '-' + added, name, rows, uploadedAt: Date.now(), selected: true });
+      added++;
+    } catch (err) {
+      errors.push(`${file.name}: ${err.message}`);
+    }
   }
+  saveShopStores(stores);
+  renderShopStores();
+  if (added)        showToast(`✅ أُضيف ${added} متجر/ملف`, 'success');
+  if (errors.length) showToast('❌ ' + errors[0], 'error');
+}
+
+function toggleShopStore(id) {
+  const stores = loadShopStores();
+  const s = stores.find(x => x.id === id);
+  if (s) { s.selected = !s.selected; saveShopStores(stores); renderShopStores(); }
+}
+
+function deleteShopStore(id) {
+  saveShopStores(loadShopStores().filter(x => x.id !== id));
+  renderShopStores();
 }
 
 function clearShopData() {
-  localStorage.removeItem(SHOP_STORE);
-  renderShopStatus();
-  showToast('🗑️ تم مسح بيانات المحل', 'success');
+  localStorage.removeItem(SHOP_STORES);
+  renderShopStores();
+  showToast('🗑️ تم مسح كل المتاجر', 'success');
 }
 
-function renderShopStatus() {
-  const el = document.getElementById('shopStatus');
-  const clr = document.getElementById('shopClearBtn');
-  if (!el) return;
-  const d = loadShopData();
-  if (d && Array.isArray(d.rows) && d.rows.length) {
-    const from = new Date(d.rows[0].ms).toLocaleDateString('ar-KW');
-    const to   = new Date(d.rows[d.rows.length - 1].ms).toLocaleDateString('ar-KW');
-    el.textContent = `📊 ${d.rows.length} صفّ (${from} ← ${to}) — ${d.fileName || 'CSV'}`;
-    el.classList.add('ok');
-    if (clr) clr.style.display = '';
-  } else {
-    el.textContent = 'لا توجد بيانات محل محمّلة بعد.';
-    el.classList.remove('ok');
-    if (clr) clr.style.display = 'none';
-  }
+function renderShopStores() {
+  const wrap = document.getElementById('shopStores');
+  const clr  = document.getElementById('shopClearBtn');
+  if (!wrap) return;
+  const stores = loadShopStores();
+  if (clr) clr.style.display = stores.length ? '' : 'none';
+  if (!stores.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = stores.map(s => {
+    const ms = (s.rows || []).map(r => r.ms);
+    const from = ms.length ? new Date(Math.min(...ms)).toLocaleDateString('ar-KW') : '—';
+    const to   = ms.length ? new Date(Math.max(...ms)).toLocaleDateString('ar-KW') : '—';
+    return `
+      <div class="shop-store-item">
+        <input type="checkbox" ${s.selected ? 'checked' : ''} onchange="toggleShopStore('${s.id}')" title="ضمّ للتقرير">
+        <span class="shop-store-name">🏪 ${esc(s.name)}</span>
+        <span class="shop-store-meta">${(s.rows || []).length} صفّ · ${from} ← ${to}</span>
+        <button class="shop-store-del" onclick="deleteShopStore('${s.id}')" title="حذف">✕</button>
+      </div>`;
+  }).join('');
 }
 
-/* تجميع مبيعات المحل ضمن نافذة زمنية */
+/* تجميع مبيعات المتجر ضمن نافذة زمنية (للفترة الكاملة استخدم -Infinity..Infinity) */
 function shopMetrics(rows, startMs, endMs) {
   const inRange = rows.filter(r => r.ms >= startMs && r.ms < endMs);
   const sum = k => inRange.reduce((s, r) => s + (r[k] || 0), 0);
@@ -2116,16 +2157,22 @@ async function generateReport() {
     const needSite = dataSource === 'site' || dataSource === 'both';
     const needShop = dataSource === 'shop' || dataSource === 'both';
 
-    /* المحل: من البيانات المحلية */
+    /* المتاجر: المحدّدة فقط، وتُقرأ كامل الفترة الموجودة في الملف (لا تُقيَّد بالفترة المختارة) */
     let shop = null;
     if (needShop) {
-      const stored = loadShopData();
-      if (!stored || !stored.rows || !stored.rows.length) {
-        throw new Error('لا توجد بيانات محل محمّلة — ارفع ملف CSV أولاً أو اختر "الموقع فقط"');
+      const stores = loadShopStores().filter(s => s.selected && Array.isArray(s.rows) && s.rows.length);
+      if (!stores.length) {
+        throw new Error('لا توجد متاجر محدّدة — ارفع ملفاً وحدّده، أو اختر "الموقع فقط"');
       }
+      const allRows = stores.flatMap(s => s.rows);
+      const ms = allRows.map(r => r.ms);
+      const fromMs = Math.min(...ms), toMs = Math.max(...ms);
       shop = {
-        current:  shopMetrics(stored.rows, curStart, now),
-        previous: shopMetrics(stored.rows, prevStart, curStart),
+        current:  shopMetrics(allRows, -Infinity, Infinity),    // كامل الفترة
+        previous: {},                                           // لا مقارنة فترة سابقة للمحل
+        stores:   stores.map(s => ({ name: s.name, ...shopMetrics(s.rows, -Infinity, Infinity) })),
+        rangeLabel: `${new Date(fromMs).toLocaleDateString('ar-KW')} ← ${new Date(toMs).toLocaleDateString('ar-KW')}`,
+        storeNames: stores.map(s => s.name),
       };
     }
 
@@ -2340,29 +2387,48 @@ function accTablesHtml(r) {
       </div>`;
   }
 
-  /* (3) كتلة المحل */
+  /* (3) كتلة المتاجر — كامل الفترة الموجودة في الملف (لا مقارنة فترة سابقة) */
   let shopHtml = '';
   if (needShop && shop) {
-    const p = shopPv || {};
     const shopRows = [
-      ['إجمالي البيع',            kwd(shop.grossSales),  arrow(spct(shop.grossSales,  p.grossSales))],
-      ['المبالغ المستردة',        kwd(shop.refunds),     '—'],
-      ['الخصومات',                kwd(shop.discounts),   '—'],
-      ['صافي المبيعات',           kwd(shop.netSales),    arrow(spct(shop.netSales,    p.netSales))],
-      ['تكلفة البضاعة المباعة',   kwd(shop.cogs),        arrow(spct(shop.cogs,        p.cogs))],
-      ['إجمالي الربح',            kwd(shop.grossProfit), arrow(spct(shop.grossProfit, p.grossProfit))],
-      ['الهامش',                  `${shop.margin}%`,     arrow(spct(shop.margin,      p.margin))],
-      ['أيام مسجّلة في الفترة',   shop.days,             '—'],
-    ].map(([k, v, d]) => `<tr><td>${k}</td><td style="font-weight:700">${v}</td><td>${d}</td></tr>`).join('');
+      ['إجمالي البيع',           kwd(shop.grossSales)],
+      ['المبالغ المستردة',       kwd(shop.refunds)],
+      ['الخصومات',               kwd(shop.discounts)],
+      ['صافي المبيعات',          kwd(shop.netSales)],
+      ['تكلفة البضاعة المباعة',  kwd(shop.cogs)],
+      ['إجمالي الربح',           kwd(shop.grossProfit)],
+      ['الهامش',                 `${shop.margin}%`],
+      ['أيام مسجّلة',            shop.days],
+    ].map(([k, v]) => `<tr><td>${k}</td><td style="font-weight:700">${v}</td></tr>`).join('');
+
+    const range = r.shop.rangeLabel ? badge('shop', esc(r.shop.rangeLabel)) : '';
+    const names = Array.isArray(r.shop.storeNames) && r.shop.storeNames.length
+      ? `<div style="font-size:.8rem;color:var(--text-muted);margin-bottom:.5rem">المتاجر المدموجة: ${r.shop.storeNames.map(esc).join('، ')}</div>` : '';
+
+    const stores = Array.isArray(r.shop.stores) ? r.shop.stores : [];
+    let perStore = '';
+    if (stores.length > 1) {
+      const sr = stores.map(s =>
+        `<tr><td>${esc(s.name)}</td><td>${kwd(s.netSales)}</td><td>${kwd(s.grossProfit)}</td><td>${s.margin}%</td></tr>`).join('');
+      perStore = `
+        <div class="chart-card">
+          <h3>🏪 تفصيل المتاجر</h3>
+          <table class="acc-table">
+            <thead><tr><th>المتجر</th><th>صافي المبيعات</th><th>إجمالي الربح</th><th>الهامش</th></tr></thead>
+            <tbody>${sr}</tbody>
+          </table>
+        </div>`;
+    }
 
     shopHtml = `
       <div class="chart-card">
-        <h3>🏪 مؤشرات المحل ${both ? badge('shop', 'محل') : ''}</h3>
+        <h3>🏪 مؤشرات المتاجر ${both ? badge('shop', 'محل') : ''} ${range}</h3>
+        ${names}
         <table class="acc-table">
-          <thead><tr><th>المؤشر</th><th>القيمة</th><th>مقارنة بالفترة السابقة</th></tr></thead>
+          <thead><tr><th>المؤشر</th><th>القيمة (كامل الفترة)</th></tr></thead>
           <tbody>${shopRows}</tbody>
         </table>
-      </div>`;
+      </div>` + perStore;
   }
 
   return headerHtml + siteHtml + shopHtml;
