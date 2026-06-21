@@ -1934,28 +1934,46 @@ let dataSource = 'site';                      // 'site' | 'shop' | 'both'
 
 function selectDataSource(s) { dataSource = s; }
 
-/* تطبيع الأرقام (أرقام عربية، فواصل آلاف، رموز عملة، أقواس للسالب) */
+/* تطبيع شامل: إزالة علامات الاتجاه (RLM/LRM/BOM) وتحويل الأرقام
+   العربية-الهندية (٠-٩) والفارسية/الأردية (۰-۹) إلى لاتينية.
+   يحلّ مشكلة ملفات Loyverse بالعربية حيث تحوي الخلايا علامات اتجاه خفية. */
+function normalizeNumerals(s) {
+  return String(s == null ? '' : s)
+    .replace(/[‎‏‪-‮⁦-⁩؜﻿]/g, '')  // علامات الاتجاه + BOM
+    .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660))    // ٠-٩
+    .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06f0));   // ۰-۹
+}
+
+/* تطبيع الأرقام (أرقام عربية/فارسية، فواصل آلاف، فاصلة عشرية عربية، أقواس للسالب) */
 function parseNum(v) {
-  if (v == null) return 0;
-  let s = String(v).trim();
+  let s = normalizeNumerals(v).trim();
   if (!s) return 0;
   const neg = /^\(.*\)$/.test(s) || s.includes('-');
-  s = s.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))   // أرقام عربية → لاتينية
-       .replace(/[،,]/g, '')                              // فواصل آلاف
-       .replace(/[^\d.]/g, '');                           // أبقِ الأرقام والنقطة فقط
+  s = s.replace(/٫/g, '.')        // الفاصلة العشرية العربية ٫ → .
+       .replace(/٬/g, '')         // فاصل الآلاف العربي ٬
+       .replace(/[،,]/g, '')           // فواصل آلاف
+       .replace(/[^\d.]/g, '');        // أبقِ الأرقام والنقطة فقط
   const n = parseFloat(s);
   if (isNaN(n)) return 0;
   return neg ? -Math.abs(n) : n;
 }
 
-/* تحويل التاريخ لأي صيغة شائعة إلى ms (يدعم YYYY-MM-DD و DD/MM/YYYY) */
+/* أسماء الأشهر العربية (ميلادية) لدعم صيغ مثل «٢١ يونيو ٢٠٢٦» */
+const AR_MONTHS = {
+  'يناير':1,'فبراير':2,'مارس':3,'ابريل':4,'أبريل':4,'مايو':5,'يونيو':6,'يونيه':6,
+  'يوليو':7,'يوليه':7,'اغسطس':8,'أغسطس':8,'سبتمبر':9,'اكتوبر':10,'أكتوبر':10,'نوفمبر':11,'ديسمبر':12,
+};
+
+/* تحويل التاريخ لأي صيغة شائعة إلى ms (يدعم الأرقام العربية/الفارسية وأسماء الأشهر) */
 function parseDate(v) {
-  let s = String(v || '').trim().replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  let s = normalizeNumerals(v).trim();
   if (!s) return NaN;
-  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);          // YYYY-MM-DD
+  let m = s.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);           // YYYY-MM-DD
   if (m) return new Date(+m[1], +m[2] - 1, +m[3]).getTime();
-  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/);            // DD/MM/YYYY
+  m = s.match(/(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/);             // DD/MM/YYYY
   if (m) { let y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[2] - 1, +m[1]).getTime(); }
+  m = s.match(/(\d{1,2})\s+([ء-ي]+)\s+(\d{4})/);          // DD اسم-الشهر YYYY
+  if (m && AR_MONTHS[m[2]] != null) return new Date(+m[3], AR_MONTHS[m[2]] - 1, +m[1]).getTime();
   const t = Date.parse(s);
   return isNaN(t) ? NaN : t;
 }
@@ -1989,15 +2007,18 @@ function mapShopHeader(h) {
 
 /* تحليل ملف CSV لمبيعات المحل → مصفوفة صفوف */
 function parseShopCsv(text) {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
+  /* تطبيع شامل أولاً: يزيل BOM وعلامات الاتجاه ويحوّل الأرقام العربية/الفارسية */
+  const lines = normalizeNumerals(text).split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) throw new Error('الملف فارغ أو لا يحتوي صفوف بيانات');
   const headers = splitCsvLine(lines[0]).map(mapShopHeader);
   if (!headers.includes('date')) throw new Error('لم يُعثر على عمود "التاريخ" في الملف');
   const rows = [];
+  let sampleDate = '';
   for (let i = 1; i < lines.length; i++) {
     const cells = splitCsvLine(lines[i]);
     const row = {};
     headers.forEach((key, j) => { if (key) row[key] = cells[j]; });
+    if (!sampleDate && row.date) sampleDate = row.date;
     const ms = parseDate(row.date);
     if (isNaN(ms)) continue;                       // تجاهل الصفوف بلا تاريخ صالح
     rows.push({
@@ -2011,7 +2032,8 @@ function parseShopCsv(text) {
       margin:      parseNum(row.margin),
     });
   }
-  if (!rows.length) throw new Error('لم يُقرأ أي صفّ صالح (تحقّق من صيغة التاريخ)');
+  if (!rows.length) throw new Error('لم يُقرأ أي صفّ صالح — تعذّر فهم صيغة التاريخ' +
+    (sampleDate ? ` (مثال من الملف: «${sampleDate}»)` : ''));
   return rows.sort((a, b) => a.ms - b.ms);
 }
 
