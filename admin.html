@@ -1014,7 +1014,7 @@ async function exportExcel() {
       'التاريخ':        new Date(o.created_at).toLocaleString('ar-KW'),
       'الزبون':         o.customer_name  || '',
       'الهاتف':         o.customer_phone || '',
-      'العنوان':        o.address        || '',
+      'العنوان':        formatAddress(o.address),
       'الملاحظات':      o.notes          || '',
       'المنتجات':       (Array.isArray(o.items) ? o.items : []).map(i => `${i.name} × ${i.qty}`).join('، '),
       'المجموع (د.ك)':  parseFloat(o.total || 0).toFixed(3),
@@ -1235,7 +1235,7 @@ function openOrderDetails(id) {
       <div class="od-row"><span>الاسم</span><span>${esc(o.customer_name || '—')}</span></div>
       <div class="od-row"><span>الهاتف</span><span dir="ltr">${esc(o.customer_phone || '—')}</span></div>
       ${o.customer_email ? `<div class="od-row"><span>الإيميل</span><span dir="ltr">${esc(o.customer_email)}</span></div>` : ''}
-      <div class="od-row"><span>العنوان</span><span>${esc(o.address || '—')}</span></div>
+      <div class="od-row"><span>العنوان</span><span>${esc(formatAddress(o.address) || '—')}</span></div>
       ${o.notes ? `<div class="od-row"><span>ملاحظات</span><span>${esc(o.notes)}</span></div>` : ''}
       ${o.customer_ip ? `<div class="od-row"><span>IP</span><span dir="ltr" style="color:var(--text-muted);font-size:.78rem">${esc(o.customer_ip)}</span></div>` : ''}
     </div>
@@ -2610,7 +2610,7 @@ function renderOrderCard(order) {
     </div>
     <div class="order-card-body">
       <div class="order-customer">👤 ${esc(order.customer_name || '—')} — 📞 ${esc(order.customer_phone || '—')}</div>
-      <div class="order-address">📍 ${esc(order.address || '—')}</div>
+      <div class="order-address">📍 ${esc(formatAddress(order.address) || '—')}</div>
       ${order.notes ? `<div class="order-address">📝 ${esc(order.notes)}</div>` : ''}
       <div class="order-items">${esc(itemsText)}</div>
       ${order.delivery_fee > 0 ? `<div class="order-address">🚚 رسوم التوصيل: ${parseFloat(order.delivery_fee).toFixed(3)} د.ك</div>` : ''}
@@ -2764,6 +2764,22 @@ function esc(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── تنسيق العنوان ──
+   العناوين القديمة محفوظة كأرقام فقط ("5 - 12 - 7 - 3"). نضيف تسمية
+   لكل رقم بالترتيب: قطعة، شارع، منزل، شقة → "قطعة 5 - شارع 12 - منزل 7 - شقة 3".
+   العناوين التي تحوي حروفاً (اسم منطقة أو تسميات موجودة) تُترك كما هي. */
+function formatAddress(addr) {
+  const raw = String(addr == null ? '' : addr).trim();
+  if (!raw) return '';
+  const labels = ['قطعة', 'شارع', 'منزل', 'شقة'];
+  const parts  = raw.split(/\s*[-،,]\s*/).map(p => p.trim()).filter(Boolean);
+  /* نطبّق التسميات فقط إن كانت كل الأجزاء أرقاماً (عربية أو لاتينية) وعددها 2..4 */
+  const allNumeric = parts.length >= 2 && parts.length <= 4 &&
+                     parts.every(p => /^[0-9٠-٩]+$/.test(p));
+  if (!allNumeric) return raw;
+  return parts.map((p, i) => (labels[i] ? `${labels[i]} ${p}` : p)).join(' - ');
 }
 
 /* ════════════════════════════════════════
