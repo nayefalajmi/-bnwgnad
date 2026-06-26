@@ -406,6 +406,7 @@
     <a href="#" data-section="stats" onclick="switchSection(event,'stats')">📊 الإحصائيات</a>
     <a href="#" data-section="banner" onclick="switchSection(event,'banner')">🖼️ البنر الإعلاني</a>
     <a href="#" data-section="accountant" onclick="switchSection(event,'accountant')">🧮 المحاسب الذكي</a>
+    <a href="#" data-section="telegram" id="navTelegram" onclick="switchSection(event,'telegram')" style="display:none">🔔 إشعارات تيليغرام</a>
     <a href="#" data-section="team" id="navTeam" onclick="switchSection(event,'team')" style="display:none">👥 إدارة الفريق</a>
     <a href="index.html">🏪 المتجر</a>
     <a href="#" onclick="changePassword(event)">🔑 تغيير كلمة المرور</a>
@@ -643,6 +644,37 @@
       </div>
 
       <div id="zoneList" class="zone-list" style="margin-top:1rem">
+        <div class="orders-empty"><div class="spinner" style="margin:0 auto 1rem"></div><p>جاري التحميل…</p></div>
+      </div>
+    </div>
+
+    <!-- ── Telegram Notifications ── -->
+    <div id="sec-telegram" style="display:none">
+      <div class="admin-header">
+        <h2>🔔 إشعارات تيليغرام</h2>
+      </div>
+      <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1rem;line-height:1.7">
+        يصلك إشعار فوري على تيليغرام عند كل طلب جديد (يحتوي اسم الزبون، المنطقة، المبلغ، والمنتجات) — حتى لو المتصفح مغلق.
+      </p>
+
+      <details style="margin-bottom:1.2rem;background:var(--bg-soft,#f7f4ef);border-radius:12px;padding:.9rem 1.1rem">
+        <summary style="cursor:pointer;font-weight:700;color:var(--primary)">📖 كيف أجهّز البوت وأجيب الـ Chat ID؟</summary>
+        <ol style="margin:.8rem 0 0;padding-inline-start:1.3rem;font-size:.88rem;line-height:1.9;color:var(--text-muted)">
+          <li>في تيليغرام كلّم <b>@BotFather</b> وأرسل <code>/newbot</code>، وخذ منه الـ <b>Token</b>.</li>
+          <li>حطّ الـ Token في Vercel ▸ Settings ▸ Environment Variables باسم <code>TELEGRAM_BOT_TOKEN</code>.</li>
+          <li>ابدأ محادثة مع بوتك واضغط <b>Start</b> (لازم تكلّمه أول مرة عشان يقدر يرسل لك).</li>
+          <li>كلّم <b>@userinfobot</b> ليعطيك رقم الـ <b>Chat ID</b> حقّك، وأضِفه بالأسفل.</li>
+          <li>للمجموعات: أضِف بوتك للمجموعة، والـ Chat ID يكون رقماً يبدأ بـ <code>-</code>.</li>
+        </ol>
+      </details>
+
+      <div class="zone-add-row">
+        <input type="text" id="newTgChatId" placeholder="Chat ID (مثل 123456789)" dir="ltr" />
+        <input type="text" id="newTgLabel"  placeholder="اسم/وصف (اختياري)" />
+        <button class="btn btn-accent" onclick="addTelegramChat()">➕ إضافة مستلِم</button>
+      </div>
+
+      <div id="tgList" class="zone-list" style="margin-top:1rem">
         <div class="orders-empty"><div class="spinner" style="margin:0 auto 1rem"></div><p>جاري التحميل…</p></div>
       </div>
     </div>
@@ -1076,7 +1108,7 @@ const SECTION_PERM = { products:'products_view', orders:'orders_view', stats:'st
 function can(p) { return isOwner || myPerms[p] === true; }
 
 function sectionAllowed(name) {
-  if (name === 'team') return isOwner;
+  if (name === 'team' || name === 'telegram') return isOwner;
   const need = SECTION_PERM[name];
   return need ? can(need) : true;
 }
@@ -1101,7 +1133,7 @@ function applyPermissionsUI() {
 }
 
 function firstAllowedSection() {
-  const order = ['products','orders','categories','zones','discounts','loyalty','stats','banner','accountant','team'];
+  const order = ['products','orders','categories','zones','discounts','loyalty','stats','banner','accountant','telegram','team'];
   return order.find(sectionAllowed) || null;
 }
 
@@ -1283,6 +1315,7 @@ function switchSection(e, name) {
   document.getElementById('sec-orders').style.display   = name === 'orders'   ? 'block' : 'none';
   document.getElementById('sec-banner').style.display   = name === 'banner'   ? 'block' : 'none';
   document.getElementById('sec-accountant').style.display = name === 'accountant' ? 'block' : 'none';
+  document.getElementById('sec-telegram').style.display   = name === 'telegram'   ? 'block' : 'none';
   document.getElementById('sec-categories').style.display = name === 'categories' ? 'block' : 'none';
   document.getElementById('sec-zones').style.display      = name === 'zones'      ? 'block' : 'none';
   document.getElementById('sec-discounts').style.display  = name === 'discounts'  ? 'block' : 'none';
@@ -1293,6 +1326,7 @@ function switchSection(e, name) {
   if (name === 'stats')      loadFullStats();
   if (name === 'banner')     loadBannerPreview();
   if (name === 'accountant') { renderSavedReports(); renderShopStores(); }
+  if (name === 'telegram')   loadTelegramChats();
   if (name === 'categories') loadCategoriesAdmin();
   if (name === 'zones')      loadZonesAdmin();
   if (name === 'discounts')  loadDiscounts();
@@ -1653,6 +1687,88 @@ async function deleteZone(id) {
   if (error) { showToast('❌ ' + error.message, 'error'); return; }
   await loadZonesAdmin();
   showToast('🗑️ تم حذف المنطقة', 'success');
+}
+
+/* ════════════════════════════════════════
+   TELEGRAM NOTIFICATIONS (إشعارات تيليغرام)
+════════════════════════════════════════ */
+let telegramChats = [];
+
+async function loadTelegramChats() {
+  const el = document.getElementById('tgList');
+  const { data, error } = await supabase
+    .from('telegram_chats').select('*').order('created_at', { ascending: true });
+  if (error) {
+    el.innerHTML = '<div class="orders-empty">تعذّر التحميل. تأكد أنك شغّلت <code>sql/telegram-notify.sql</code> في Supabase.</div>';
+    return;
+  }
+  telegramChats = data || [];
+  if (!telegramChats.length) {
+    el.innerHTML = '<div class="orders-empty">لا يوجد مستلمون بعد. أضف Chat ID من الأعلى.</div>';
+    return;
+  }
+  el.innerHTML = telegramChats.map(c => `
+    <div class="zone-item" data-id="${c.id}">
+      <span dir="ltr" style="font-family:monospace;font-size:.9rem">${esc(c.chat_id)}</span>
+      <span style="flex:1;color:var(--text-muted);font-size:.85rem">${esc(c.label || '')}</span>
+      <label style="display:flex;align-items:center;gap:.3rem;font-size:.8rem;cursor:pointer">
+        <input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="toggleTelegramChat(${c.id}, this.checked)" />
+        مُفعّل
+      </label>
+      <button class="btn btn-sm"        onclick="testTelegram('${esc(c.chat_id)}')" title="إرسال رسالة تجربة">🧪</button>
+      <button class="btn btn-sm btn-danger" onclick="deleteTelegramChat(${c.id})">🗑️</button>
+    </div>`).join('');
+}
+
+async function addTelegramChat() {
+  const chatId = document.getElementById('newTgChatId').value.trim();
+  const label  = document.getElementById('newTgLabel').value.trim();
+  if (!chatId) { showToast('⚠️ اكتب الـ Chat ID', 'error'); return; }
+  if (!/^-?\d+$/.test(chatId)) { showToast('⚠️ الـ Chat ID لازم يكون رقماً', 'error'); return; }
+  const { error } = await supabase.from('telegram_chats').insert([{ chat_id: chatId, label: label || null }]);
+  if (error) {
+    showToast(error.code === '23505' ? '⚠️ هذا الـ Chat ID مضاف مسبقاً' : '❌ ' + error.message, 'error');
+    return;
+  }
+  document.getElementById('newTgChatId').value = '';
+  document.getElementById('newTgLabel').value  = '';
+  await loadTelegramChats();
+  showToast('✅ تمت إضافة المستلِم', 'success');
+}
+
+async function toggleTelegramChat(id, enabled) {
+  const { error } = await supabase.from('telegram_chats').update({ enabled }).eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); await loadTelegramChats(); return; }
+  showToast(enabled ? '🔔 تم التفعيل' : '🔕 تم الإيقاف', 'success');
+}
+
+async function deleteTelegramChat(id) {
+  const c = telegramChats.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm(`حذف المستلِم "${c.label || c.chat_id}"؟`)) return;
+  const { error } = await supabase.from('telegram_chats').delete().eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  await loadTelegramChats();
+  showToast('🗑️ تم الحذف', 'success');
+}
+
+async function testTelegram(chatId) {
+  showToast('⏳ جاري إرسال رسالة التجربة…', 'success');
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { showToast('❌ جلستك انتهت، سجّل دخول من جديد', 'error'); return; }
+    const res = await fetch('/api/notify-telegram', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body:    JSON.stringify({ test: true, chat_id: chatId }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (res.ok && out.sent > 0) showToast('✅ وصلتك رسالة التجربة على تيليغرام', 'success');
+    else if (out.error === 'no_chats') showToast('⚠️ لا توجد محادثات مفعّلة', 'error');
+    else showToast('❌ تعذّر الإرسال — تأكد أنك بدأت محادثة مع البوت وأن التوكن مضبوط', 'error');
+  } catch (e) {
+    showToast('❌ ' + e.message, 'error');
+  }
 }
 
 /* ════════════════════════════════════════
