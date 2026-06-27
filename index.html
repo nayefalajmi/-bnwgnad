@@ -132,13 +132,23 @@
           <select id="aArea" onchange="renderCheckoutSummary()"></select>
         </div>
         <div class="form-group">
-          <label>الشارع *</label>
-          <input type="text" id="aStreet" placeholder="شارع الخليج" />
+          <label>القطعة *</label>
+          <input type="text" id="aBlock" placeholder="مثال: ٥" />
         </div>
       </div>
       <div class="addr-row">
         <div class="form-group">
-          <label>رقم المنزل / البناية *</label>
+          <label>الشارع *</label>
+          <input type="text" id="aStreet" placeholder="شارع الخليج" />
+        </div>
+        <div class="form-group">
+          <label>الجادة</label>
+          <input type="text" id="aAvenue" placeholder="اختياري" />
+        </div>
+      </div>
+      <div class="addr-row">
+        <div class="form-group">
+          <label>رقم البيت / البناية *</label>
           <input type="text" id="aBuilding" placeholder="١٢" />
         </div>
         <div class="form-group">
@@ -841,12 +851,14 @@ async function submitAddress() {
   const phone    = document.getElementById('aPhone').value.trim();
   const email    = document.getElementById('aEmail').value.trim();
   const area     = document.getElementById('aArea').value.trim();
+  const block    = document.getElementById('aBlock').value.trim();
   const street   = document.getElementById('aStreet').value.trim();
+  const avenue   = document.getElementById('aAvenue').value.trim();
   const building = document.getElementById('aBuilding').value.trim();
   const flat     = document.getElementById('aFlat').value.trim();
   const notes    = document.getElementById('aNotes').value.trim();
 
-  if (!name || !phone || !area || !street || !building) {
+  if (!name || !phone || !area || !block || !street || !building) {
     showToast('⚠️ يرجى ملء جميع الحقول المطلوبة', 'error');
     return;
   }
@@ -882,7 +894,13 @@ async function submitAddress() {
   const pointsUsed  = Math.round(loyaltyDisc * 100);
   const total       = afterCode - loyaltyDisc + fee;
   const orderRef    = 'ORD-' + Date.now();
-  const address     = `${area}، ${street}، ${building}${flat ? ' ش'+flat : ''}`;
+  /* نبني العنوان بتسميات جاهزة ونحذف الاختياري الفارغ (الجادة/الشقة)
+     ليُعرض في اللوحة مباشرةً: "المنطقة، قطعة X، شارع Y، [جادة Z،] بيت W[، شقة V]" */
+  const addrParts = [area, 'قطعة ' + block, 'شارع ' + street];
+  if (avenue) addrParts.push('جادة ' + avenue);
+  addrParts.push('بيت ' + building);
+  if (flat)   addrParts.push('شقة ' + flat);
+  const address     = addrParts.join('، ');
 
   /* استهلاك كود الخصم ونقاط الولاء (ذرّياً عبر RPC) */
   if (appliedDiscount && discount > 0) {
@@ -903,6 +921,7 @@ async function submitAddress() {
         customer_email: email || null,
         customer_ip:    clientIp || null,
         address:        address,
+        block:          block || null,
         notes:          notes || null,
         items:          cart.map(i => ({ id: i.id, name: i.variant ? i.name + ' - ' + i.variant : i.name, variant: i.variant || null, price: i.price, qty: i.qty })),
         total:          parseFloat(total.toFixed(3)),
@@ -937,7 +956,7 @@ async function submitAddress() {
         loyaltyDiscount:   parseFloat(loyaltyDisc.toFixed(3)),
         orderRef,
         items:    cart.map(i => ({ id: i.id, name: i.variant ? i.name + ' - ' + i.variant : i.name, variant: i.variant || null, price: i.price, qty: i.qty })),
-        customer: { name, phone, email: email || '', address, notes: notes || '' },
+        customer: { name, phone, email: email || '', address, block, notes: notes || '' },
       }),
     });
     const data = await resp.json();
