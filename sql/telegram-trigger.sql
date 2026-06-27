@@ -32,7 +32,7 @@ begin
      and (TG_OP = 'INSERT' or (TG_OP = 'UPDATE' and OLD.status is distinct from 'new'))
   then
     perform net.http_post(
-      url     := 'https://bnwgnad.com/api/notify-telegram',
+      url     := 'https://www.bnwgnad.com/api/notify-telegram',  -- النطاق النهائي (بدون www يعطي 308 redirect وpg_net لا يتبعه)
       headers := jsonb_build_object(
         'Content-Type',     'application/json',
         'x-webhook-secret', '<WEBHOOK_SECRET>'   -- ← نفس قيمة TELEGRAM_WEBHOOK_SECRET في Vercel
