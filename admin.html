@@ -2883,18 +2883,37 @@ function esc(str) {
 }
 
 /* ── تنسيق العنوان ──
-   العناوين القديمة محفوظة كأرقام فقط ("5 - 12 - 7 - 3"). نضيف تسمية
-   لكل رقم بالترتيب: قطعة، شارع، منزل، شقة → "قطعة 5 - شارع 12 - منزل 7 - شقة 3".
-   العناوين التي تحوي حروفاً (اسم منطقة أو تسميات موجودة) تُترك كما هي. */
+   يضيف تسميات واضحة لأجزاء العنوان لعرضها في اللوحة:
+   • الصيغة الجديدة "المنطقة، الشارع، البناية شالشقة" (مفصولة بفواصل)
+     → "المنطقة - قطعة … - شارع … - منزل …" (الجزء الأول = المنطقة بلا تسمية).
+   • الصيغة القديمة أرقام فقط "5 - 12 - 7 - 3"
+     → "قطعة 5 - شارع 12 - منزل 7 - شقة 3".
+   أي صيغة أخرى غير معروفة تُترك كما هي. */
 function formatAddress(addr) {
   const raw = String(addr == null ? '' : addr).trim();
   if (!raw) return '';
-  const labels = ['قطعة', 'شارع', 'منزل', 'شقة'];
-  const parts  = raw.split(/\s*[-،,]\s*/).map(p => p.trim()).filter(Boolean);
-  /* نطبّق التسميات فقط إن كانت كل الأجزاء أرقاماً (عربية أو لاتينية) وعددها 2..4 */
+
+  /* الصيغة الجديدة: تحوي فاصلة عربية/لاتينية */
+  if (/[،,]/.test(raw)) {
+    /* افصل جزء الشقة المُلحَق بالبناية بصيغة " ش<رقم>" إن وُجد */
+    let body = raw, flat = '';
+    const m = body.match(/\s+ش([^\s،,]+)\s*$/);
+    if (m) { flat = m[1]; body = body.slice(0, m.index).trim(); }
+
+    const segs = body.split(/\s*[،,]\s*/).map(s => s.trim()).filter(Boolean);
+    if (flat) segs.push(flat);
+
+    /* الجزء الأول منطقة بلا تسمية، ثم: قطعة، شارع، منزل، شقة */
+    const labels = [null, 'قطعة', 'شارع', 'منزل', 'شقة'];
+    return segs.map((s, i) => (labels[i] ? `${labels[i]} ${s}` : s)).join(' - ');
+  }
+
+  /* الصيغة القديمة: أرقام فقط مفصولة بـ "-" */
+  const parts = raw.split(/\s*-\s*/).map(p => p.trim()).filter(Boolean);
   const allNumeric = parts.length >= 2 && parts.length <= 4 &&
                      parts.every(p => /^[0-9٠-٩]+$/.test(p));
   if (!allNumeric) return raw;
+  const labels = ['قطعة', 'شارع', 'منزل', 'شقة'];
   return parts.map((p, i) => (labels[i] ? `${labels[i]} ${p}` : p)).join(' - ');
 }
 
