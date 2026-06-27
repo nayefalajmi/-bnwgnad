@@ -39,7 +39,7 @@ create policy "tg_delete_auth" on telegram_chats for delete to authenticated usi
 --    Table:   public.orders
 --    Events:  Insert + Update
 --    Type:    HTTP Request ▸ POST
---    URL:     https://bnwgnad.com/api/notify-telegram
+--    URL:     https://www.bnwgnad.com/api/notify-telegram  (النطاق النهائي بدون redirect)
 --    Headers: x-webhook-secret = <نفس قيمة TELEGRAM_WEBHOOK_SECRET في Vercel>
 --  الدالة نفسها تتجاهل أي تحديث لا يحوّل حالة الطلب إلى 'new'،
 --  فلا تتكرر الإشعارات (طلب البطاقة: pending_payment → new).
