@@ -136,6 +136,7 @@ export default async function handler(req, res) {
     customer_email:  customer?.email   || null,
     customer_ip:     ip || null,
     address:         customer?.address || '',
+    block:           customer?.block   || null,
     notes:           customer?.notes   || null,
     items:           Array.isArray(items) ? items : [],
     total:           parseFloat(parseFloat(amount).toFixed(3)),
