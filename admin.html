@@ -405,6 +405,7 @@
     </a>
     <a href="#" data-section="stats" onclick="switchSection(event,'stats')">📊 الإحصائيات</a>
     <a href="#" data-section="banner" onclick="switchSection(event,'banner')">🖼️ البنر الإعلاني</a>
+    <a href="#" data-section="promo" onclick="switchSection(event,'promo')">🎁 بوب آب العروض</a>
     <a href="#" data-section="accountant" onclick="switchSection(event,'accountant')">🧮 المحاسب الذكي</a>
     <a href="#" data-section="telegram" id="navTelegram" onclick="switchSection(event,'telegram')" style="display:none">🔔 إشعارات تيليغرام</a>
     <a href="#" data-section="team" id="navTeam" onclick="switchSection(event,'team')" style="display:none">👥 إدارة الفريق</a>
@@ -559,6 +560,50 @@
 
         <div class="modal-footer" style="margin-top:1rem">
           <button class="btn btn-accent" id="bannerSaveBtn" onclick="uploadBanner()" disabled>💾 تغيير صورة البنر</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Promo Popup (بوب آب العروض) ── -->
+    <div id="sec-promo" style="display:none">
+      <div class="admin-header">
+        <h2>🎁 بوب آب العروض</h2>
+      </div>
+      <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1rem;line-height:1.7">
+        بوب آب يظهر تلقائياً للزائر مرة واحدة لكل جلسة. ارفع صورة العرض واختر المنتج
+        المرتبط — عند ضغط الزائر على الصورة يُفتح المنتج مباشرة. يُفضّل صورة مربّعة (مثلاً 1080×1080).
+      </p>
+
+      <div class="chart-card" style="max-width:560px">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;font-weight:700;margin-bottom:1rem">
+          <input type="checkbox" id="promoEnabled" onchange="savePromoEnabled(this.checked)" />
+          تفعيل البوب آب
+        </label>
+
+        <div class="form-group" style="margin-bottom:1.2rem">
+          <label>المنتج المرتبط</label>
+          <select id="promoProduct" onchange="savePromoProduct(this.value)">
+            <option value="">— اختر منتجاً —</option>
+          </select>
+        </div>
+
+        <p style="font-weight:600;margin-bottom:.6rem">صورة العرض الحالية</p>
+        <div id="promoCurrentWrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg);min-height:120px;display:flex;align-items:center;justify-content:center">
+          <span id="promoCurrentEmpty" style="color:var(--text-muted);padding:2rem;font-size:.9rem">لا توجد صورة مرفوعة بعد</span>
+          <img id="promoCurrentImg" alt="صورة العرض الحالية" style="display:none;max-width:100%;height:auto" />
+        </div>
+
+        <div class="img-upload-area" id="promoUploadArea" style="margin-top:1.25rem">
+          <input type="file" id="promoFile" accept="image/*" onchange="previewPromoFile(event)" />
+          <div id="promoPlaceholder">
+            <div class="upload-icon">🎁</div>
+            <p class="upload-text">اضغط لاختيار صورة العرض أو اسحب وأفلت</p>
+          </div>
+          <img id="promoPreview" class="img-preview" alt="معاينة العرض" />
+        </div>
+
+        <div class="modal-footer" style="margin-top:1rem">
+          <button class="btn btn-accent" id="promoSaveBtn" onclick="uploadPromo()" disabled>💾 حفظ صورة العرض</button>
         </div>
       </div>
     </div>
@@ -1103,7 +1148,7 @@ const PERM_GROUPS = [
   { title:'المنتجات', keys:['products_view','products_edit','products_add','products_delete'] },
   { title:'أقسام أخرى', keys:['zones','categories','stats','accountant','banner','loyalty','discounts'] },
 ];
-const SECTION_PERM = { products:'products_view', orders:'orders_view', stats:'stats', banner:'banner', accountant:'accountant', categories:'categories', zones:'zones', discounts:'discounts', loyalty:'loyalty' };
+const SECTION_PERM = { products:'products_view', orders:'orders_view', stats:'stats', banner:'banner', promo:'banner', accountant:'accountant', categories:'categories', zones:'zones', discounts:'discounts', loyalty:'loyalty' };
 
 function can(p) { return isOwner || myPerms[p] === true; }
 
@@ -1133,7 +1178,7 @@ function applyPermissionsUI() {
 }
 
 function firstAllowedSection() {
-  const order = ['products','orders','categories','zones','discounts','loyalty','stats','banner','accountant','telegram','team'];
+  const order = ['products','orders','categories','zones','discounts','loyalty','stats','banner','promo','accountant','telegram','team'];
   return order.find(sectionAllowed) || null;
 }
 
@@ -1314,6 +1359,7 @@ function switchSection(e, name) {
   document.getElementById('sec-stats').style.display    = name === 'stats'    ? 'block' : 'none';
   document.getElementById('sec-orders').style.display   = name === 'orders'   ? 'block' : 'none';
   document.getElementById('sec-banner').style.display   = name === 'banner'   ? 'block' : 'none';
+  document.getElementById('sec-promo').style.display    = name === 'promo'    ? 'block' : 'none';
   document.getElementById('sec-accountant').style.display = name === 'accountant' ? 'block' : 'none';
   document.getElementById('sec-telegram').style.display   = name === 'telegram'   ? 'block' : 'none';
   document.getElementById('sec-categories').style.display = name === 'categories' ? 'block' : 'none';
@@ -1325,6 +1371,7 @@ function switchSection(e, name) {
   if (name === 'orders')     loadOrders();
   if (name === 'stats')      loadFullStats();
   if (name === 'banner')     loadBannerPreview();
+  if (name === 'promo')      loadPromoAdmin();
   if (name === 'accountant') { renderSavedReports(); renderShopStores(); }
   if (name === 'telegram')   loadTelegramChats();
   if (name === 'categories') loadCategoriesAdmin();
@@ -2034,6 +2081,92 @@ async function uploadBanner() {
     showToast('❌ فشل رفع البنر: ' + err.message, 'error');
   } finally {
     btn.textContent = '💾 تغيير صورة البنر';
+    btn.disabled = false;
+  }
+}
+
+/* ════════════════════════════════════════
+   PROMO POPUP (بوب آب العروض)
+════════════════════════════════════════ */
+const PROMO_BUCKET = 'product-images';
+const PROMO_PATH   = 'promos/promo.jpg';   // مسار ثابت — يُستبدل عند كل رفع
+let promoFile = null;
+
+const PROMO_KEYS = ['promo_enabled', 'promo_product_id', 'promo_image_url'];
+
+async function loadPromoAdmin() {
+  /* تأكد من تحميل المنتجات لملء القائمة المنسدلة */
+  if (!Array.isArray(products) || !products.length) {
+    try { await loadProducts(); } catch (e) {}
+  }
+  const sel = document.getElementById('promoProduct');
+  sel.innerHTML = '<option value="">— اختر منتجاً —</option>' +
+    (products || []).map(p => `<option value="${p.id}">${esc(p.Name || ('#' + p.id))}</option>`).join('');
+
+  let m = {};
+  try {
+    const { data } = await supabase.from('app_settings').select('key,value').in('key', PROMO_KEYS);
+    (data || []).forEach(r => { m[r.key] = r.value; });
+  } catch (e) {}
+
+  document.getElementById('promoEnabled').checked = (m.promo_enabled || 'false') === 'true';
+  sel.value = m.promo_product_id || '';
+
+  const img   = document.getElementById('promoCurrentImg');
+  const empty = document.getElementById('promoCurrentEmpty');
+  if (m.promo_image_url) { img.src = m.promo_image_url; img.style.display = 'block'; empty.style.display = 'none'; }
+  else { img.style.display = 'none'; empty.style.display = 'block'; }
+}
+
+async function setPromoSetting(key, value) {
+  const { error } = await supabase.from('app_settings').upsert({ key, value: String(value) }, { onConflict: 'key' });
+  if (error) { showToast('❌ ' + error.message, 'error'); return false; }
+  return true;
+}
+
+async function savePromoEnabled(on) {
+  if (await setPromoSetting('promo_enabled', on ? 'true' : 'false'))
+    showToast(on ? '🟢 تم تفعيل البوب آب' : '⚪ تم تعطيل البوب آب', 'success');
+}
+
+async function savePromoProduct(val) {
+  if (await setPromoSetting('promo_product_id', val || ''))
+    showToast('✅ تم حفظ المنتج المرتبط', 'success');
+}
+
+function previewPromoFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  promoFile = file;
+  const preview = document.getElementById('promoPreview');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  document.getElementById('promoPlaceholder').style.display = 'none';
+  document.getElementById('promoSaveBtn').disabled = false;
+}
+
+async function uploadPromo() {
+  if (!promoFile) { showToast('⚠️ اختر صورة أولاً', 'error'); return; }
+  const btn = document.getElementById('promoSaveBtn');
+  btn.textContent = '⏳ جاري الرفع…';
+  btn.disabled = true;
+  try {
+    const { error } = await supabase.storage.from(PROMO_BUCKET)
+      .upload(PROMO_PATH, promoFile, { cacheControl: '3600', upsert: true, contentType: promoFile.type });
+    if (error) throw new Error(error.message);
+    const { data: pub } = supabase.storage.from(PROMO_BUCKET).getPublicUrl(PROMO_PATH);
+    const url = pub.publicUrl + '?t=' + Date.now();        // كسر الكاش عند كل تحديث
+    if (!(await setPromoSetting('promo_image_url', url))) throw new Error('تعذّر حفظ الرابط');
+    showToast('✅ تم حفظ صورة العرض', 'success');
+    promoFile = null;
+    document.getElementById('promoFile').value = '';
+    document.getElementById('promoPreview').style.display = 'none';
+    document.getElementById('promoPlaceholder').style.display = 'block';
+    await loadPromoAdmin();
+  } catch (err) {
+    showToast('❌ فشل الرفع: ' + err.message, 'error');
+  } finally {
+    btn.textContent = '💾 حفظ صورة العرض';
     btn.disabled = false;
   }
 }

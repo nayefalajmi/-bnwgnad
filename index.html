@@ -214,6 +214,14 @@
   </div>
 </div>
 
+<!-- ══ PROMO POPUP (بوب آب العروض) ══ -->
+<div id="promoOverlay" class="promo-overlay" style="display:none" onclick="promoOverlayClick(event)">
+  <div class="promo-box">
+    <button type="button" class="promo-close" onclick="closePromo()" aria-label="إغلاق">✕</button>
+    <img id="promoImg" class="promo-img" alt="عرض خاص" onclick="goPromoProduct()" />
+  </div>
+</div>
+
 <!-- ══ TOAST ══ -->
 <div class="toast" id="toast"></div>
 
@@ -1017,12 +1025,39 @@ async function loadHeroBanner() {
   } catch (e) { /* يبقى اللوجو الافتراضي عند أي خطأ */ }
 }
 
+/* ─── Promo popup (بوب آب العروض) ─── */
+let promoProductId = null;
+
+async function loadPromoPopup() {
+  if (sessionStorage.getItem('promoSeen')) return;          // مرة واحدة لكل جلسة
+  try {
+    const { data, error } = await supabase.from('app_settings').select('key,value')
+      .in('key', ['promo_enabled', 'promo_product_id', 'promo_image_url']);
+    if (error || !Array.isArray(data)) return;
+    const m = {}; data.forEach(r => { m[r.key] = r.value; });
+    if ((m.promo_enabled || 'false') !== 'true' || !m.promo_image_url) return;
+
+    promoProductId = m.promo_product_id ? parseInt(m.promo_product_id, 10) : null;
+    document.getElementById('promoImg').src = m.promo_image_url;
+    document.getElementById('promoOverlay').style.display = 'flex';
+    sessionStorage.setItem('promoSeen', '1');               // لا يتكرر هذه الجلسة
+  } catch (e) { /* تجاهل بصمت */ }
+}
+
+function closePromo() { document.getElementById('promoOverlay').style.display = 'none'; }
+function promoOverlayClick(e) { if (e.target.id === 'promoOverlay') closePromo(); }
+function goPromoProduct() {
+  closePromo();
+  if (promoProductId) openProduct(promoProductId);          // يفتح صفحة المنتج المرتبط
+}
+
 /* ─── Init ─── */
 updateCartCount();
 loadProducts();
 loadHeroBanner();
 loadDeliveryZones();
 loadLoyaltySetting();
+setTimeout(loadPromoPopup, 600);   // بعد تحميل الصفحة بقليل
 </script>
 </body>
 </html>
