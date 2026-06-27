@@ -1138,3 +1138,45 @@ tbody td { padding: .6rem 1rem; font-size: .86rem; vertical-align: middle; }
   .navbar          { padding: 0 1rem; }
   .navbar-brand .brand-name { font-size: 1.1rem; }
 }
+
+/* ══════════════════════════════
+   PROMO POPUP (بوب آب العروض)
+══════════════════════════════ */
+.promo-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.72);
+  z-index: 9000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.2rem;
+}
+.promo-box {
+  position: relative;
+  max-width: 420px; width: 100%;
+  animation: promoIn .25s ease;
+}
+.promo-img {
+  width: 100%; height: auto;
+  display: block;
+  border-radius: 16px;
+  cursor: pointer;
+  box-shadow: 0 24px 70px rgba(0,0,0,.45);
+}
+.promo-close {
+  position: absolute; top: -14px; inset-inline-end: -14px;
+  width: 40px; height: 40px;
+  border-radius: 50%; border: none;
+  background: #fff; color: #222;
+  font-size: 1.15rem; font-weight: 700; line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(0,0,0,.32);
+  display: flex; align-items: center; justify-content: center;
+}
+.promo-close:hover { background: #f0f0f0; }
+@keyframes promoIn {
+  from { transform: scale(.9); opacity: 0; }
+  to   { transform: scale(1);  opacity: 1; }
+}
+@media (max-width: 768px) {
+  .promo-box { max-width: 340px; }
+  .promo-close { top: -10px; inset-inline-end: -10px; width: 36px; height: 36px; }
+}
